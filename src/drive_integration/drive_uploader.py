@@ -172,20 +172,43 @@ class DriveUploader:
             print(f"Error uploading file: {error}")
             return None
     
-    def create_company_structure(self, company_name: str, year: int, period: str) -> Optional[str]:
+    def get_or_create_path(self, path: str) -> Optional[str]:
         """
-        Create the folder structure: Company / Year / Period
+        Get or create a folder path (e.g., 'apps/finance/enlight').
+        Returns the ID of the final folder.
+        """
+        parts = [p for p in path.split('/') if p]
+        parent_id = None  # Root
+        
+        for part in parts:
+            folder_id = self.create_folder(part, parent_id)
+            if not folder_id:
+                return None
+            parent_id = folder_id
+            
+        return parent_id
+
+    def create_company_structure(self, company_name: str, year: int, period: str, base_path: str = "apps/finance") -> Optional[str]:
+        """
+        Create the folder structure: [Base Path] / Company / Year / Period
         
         Args:
             company_name: Name of the company
             year: Year (e.g., 2024)
             period: Period (e.g., 'Q1', 'Annual')
+            base_path: Base folder path
             
         Returns:
             ID of the period folder if successful, None otherwise
         """
-        # Create company folder
-        company_folder_id = self.create_folder(company_name)
+        # Ensure base path exists
+        base_id = self.get_or_create_path(base_path)
+        if not base_id:
+            print(f"Failed to create base path: {base_path}")
+            return None
+
+        # Create company folder under base path
+        company_folder_id = self.create_folder(company_name, base_id)
         if not company_folder_id:
             return None
         

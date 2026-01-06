@@ -3,14 +3,18 @@ from typing import List, Dict, Optional
 import os
 
 class ReportMetadata:
-    def __init__(self, company_name: str, year: int, period: str, url: str, source: str, file_type: str = 'pdf'):
+    def __init__(self, company_name: str, year: int, period: str, url: str, source: str, file_type: str = 'pdf', description: str = "", extra_headers: Optional[Dict] = None, attachments: Optional[List] = None):
         self.company_name = company_name
         self.year = year
         self.period = period  # 'Q1', 'Q2', 'Q3', 'Annual'
         self.url = url
         self.source = source  # 'Enlight_IR', 'TASE_Maya'
         self.file_type = file_type
+        self.description = description
+        self.extra_headers = extra_headers or {}
+        self.attachments = attachments or []
         self.local_path: Optional[str] = None
+        self.local_paths: List[str] = []
         self.drive_id: Optional[str] = None
 
     def __repr__(self):
@@ -53,6 +57,9 @@ class BaseScraper(ABC):
                 'Accept': 'application/pdf,application/octet-stream,*/*',
                 'Referer': report.url.rsplit('/', 1)[0] + '/'  # Use the parent URL as referer
             }
+            # Merge extra headers from report metadata (e.g. Cookies)
+            if report.extra_headers:
+                headers.update(report.extra_headers)
             
             response = requests.get(report.url, stream=True, headers=headers, timeout=30)
             response.raise_for_status()
