@@ -3,6 +3,10 @@ __pycache__/
 venv/
 .env
 downloads/
+logs/
+archive/
 *.log
-queue.log
 .DS_Store
+token.pickle
+credentials.json
+output/

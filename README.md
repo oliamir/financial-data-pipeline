@@ -1,86 +1,86 @@
-# Financial Data Pipeline
+# Financial Data Pipeline 🚀
 
-An automated intelligence system for scraping, archiving, and analyzing financial reports from renewable energy companies (e.g., Apollo Power, Enlight). It combines robust historical web scraping with Generative AI (Gemini/Claude) to turn raw PDFs into structured financial models and investment theses.
-
-## 📚 Documentation
-- **[System Architecture](system_architecture.md)**: Detailed design, components, and data flow.
-- **[Diagnosis Report](diagnosis_report.md)**: Troubleshooting history for TASE scraping issues.
-- **[Walkthrough](walkthrough.md)**: Guide to recent verification tests.
+An autonomous AI agent ensuring sequential, robust processing of financial reports from the Tel Aviv Stock Exchange (TASE).
 
 ## Features
+*   **Multi-Provider AI**: Supports Google Gemini, Anthropic Claude, OpenAI, and local Ollama (Llama/DeepSeek).
+*   **Robust Monitoring**: Auto-restarts stalled jobs and enforces priority queuing.
+*   **Smart Scraper**: Headless browser scraping of TASE Maya reports.
+*   **Financial Analysis**: Automatically generates Investment Memos and Financial Models (CSV).
 
-- **Robust Scraping**: Retrieves 5+ years of historical data from TASE Maya and IR websites.
-- **Smart Deduplication**: Aggregates HTML, PDF, and Title links to prevent duplicate reports.
-- **Google Drive Sync**: Automatically mirrors local downloads to a structured Google Drive folder (`Apps/finance/{Company}/{Year}/{Period}`).
-- **AI Analysis**:
-    - **Classification**: Sorts files into "Financial Reports" vs "Others".
-    - **Extraction**: Uses LLMs (Gemini Pro/Flash, Claude 3.5 Sonnet) to extract key financial metrics (Revenue, Net Income, etc.).
-    - **Thesis Generation**: Automatically updates an `Investment_Memo.md` with insights from each new report.
+## Setup
 
-## Prerequisites
+1.  **Prerequisites**:
+    *   Python 3.10+
+    *   Chrome/Chromium (for Playwright)
+    *   [Optional] Ollama (for local AI)
 
-- Python 3.10+
-- Google Cloud Project with Drive API enabled (for Drive Sync)
-- API Keys for AI features:
-    - `GOOGLE_API_KEY` (Gemini)
-    - `ANTHROPIC_API_KEY` (Claude)
-
-## Installation
-
-1.  **Clone & Setup Environment**
+2.  **Installation**:
     ```bash
-    git clone https://github.com/oliamir/financial-data-pipeline.git
+    # Clone repo
+    git clone https://github.com/oliamir/financial-data-pipeline
     cd financial-data-pipeline
+
+    # Create venv
     python3 -m venv venv
     source venv/bin/activate
-    pip install -r requirements.txt
-    ```
 
-2.  **Install Playwright Browsers**
-    ```bash
+    # Install dependencies
+    pip install -r requirements.txt
     playwright install chromium
     ```
 
-3.  **Configure Credentials**
-    - Place `credentials.json` (Google OAuth) in the project root.
-    - Set environment variables:
-      ```bash
-      export GOOGLE_API_KEY="your_key_here"
-      export ANTHROPIC_API_KEY="your_key_here"
-      ```
-
-4.  ** Authenticate Drive (Optional)**
-    ```bash
-    python setup_drive.py
-    ```
+3.  **Configuration**:
+    *   Create a `.env` file with your API keys:
+        ```env
+        GOOGLE_API_KEY=your_key
+        ANTHROPIC_API_KEY=your_key
+        ```
 
 ## Usage
 
-### 1. Download Data
-Scrape historical reports and sync to Drive.
+### 1. The Robust Monitor (Recommended) 🛡️
+The best way to run the system. It manages the queue, handles crashes, and enforces priority (Sofwave > Apollo).
 ```bash
-# Download 5 years of Apollo Power reports and upload to Drive
-python src/download.py --company Apollo --years 5 --upload
+nohup python3 bin/robust_monitor.py > logs/monitor.log 2>&1 &
 ```
 
-### 2. Analyze Data
-Run AI analysis on downloaded files to extract financials and update the thesis.
+### 2. Manual Run
+To run a specific pipeline manually:
 ```bash
-# Use Google Gemini (Default)
-python src/analyze.py --company Apollo --provider google --model gemini-2.0-flash
+# Run with Google Gemini
+./venv/bin/python3 bin/run_pipeline.py --company Sofwave --provider google --model gemini-2.0-flash
 
-# Use Anthropic Claude
-python src/analyze.py --company Apollo --provider anthropic --model claude-3-5-sonnet-20241022
+# Run with Local Ollama (DeepSeek)
+./venv/bin/python3 bin/run_pipeline.py --company Sofwave --provider ollama --model deepseek-r1:8b --no-fallback
+```
+
+### 3. Monitoring Progress 📊
+See real-time status in your terminal:
+```bash
+python3 bin/monitor_progress.py
+```
+
+### 4. Comparison & Stats 📈
+Compare model speeds or verify output:
+```bash
+# Benchmark Llama vs DeepSeek
+python3 bin/compare_models.py
+
+# Verify Data Integrity
+python3 bin/verify_completion.py
 ```
 
 ## Project Structure
-
-```text
-src/
-├── download.py             # Scraping & Downloading CLI
-├── analyze.py              # AI Analysis CLI
-├── scrapers/               # TASE & IR Scrapers
-├── intelligence/           # LLM Client, Classifier, Extractor
-└── drive_integration/      # Google Drive Uploader
-downloads/                  # Local storage for reports
 ```
+├── bin/          # CLI tools & entry points
+├── src/          # Core library code
+├── tests/        # Test files
+├── logs/         # Log files (gitignored)
+├── downloads/    # Data files (gitignored)
+└── archive/      # Deprecated files
+```
+
+## Documentation
+See [system_architecture.md](system_architecture.md) for a deep dive into the code structure and logic.
+
