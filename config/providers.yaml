@@ -1,0 +1,26 @@
+providers:
+  gemini:
+    type: google
+    model: gemini-2.0-flash
+    api_key_env: GOOGLE_API_KEY
+    max_retries: 3
+    rate_limit_delay: 10
+
+  ollama:
+    type: ollama
+    model: qwen2.5:7b
+    host_env: OLLAMA_HOST
+    host_default: "http://localhost:11434"
+    fallback_model: llama3.1
+
+  anthropic:
+    type: anthropic
+    model: claude-3-5-sonnet-20241022
+    api_key_env: ANTHROPIC_API_KEY
+    enabled: false
+
+  openai:
+    type: openai
+    model: gpt-4o
+    api_key_env: OPENAI_API_KEY
+    enabled: false

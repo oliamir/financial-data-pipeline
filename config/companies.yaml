@@ -1,0 +1,143 @@
+companies:
+  - slug: enlight
+    name: Enlight Renewable Energy
+    tase_id: "720"
+    tase_company_id: "720"
+    ir_url: https://enlightenergy.co.il/investors/financial-reports/
+    ir_platform: wordpress
+    priority: high
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: energix
+    name: Energix - Renewable Energies
+    tase_id: "1123355"
+    tase_company_id: "1581"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: ormat
+    name: Ormat Technologies
+    tase_id: "1134402"
+    tase_company_id: "2250"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: USD
+    sector: renewable_energy
+    dual_listed: true
+
+  - slug: doral
+    name: Doral Renewable Energy Resources
+    tase_id: "1166768"
+    tase_company_id: "1801"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: ellomay
+    name: Ellomay Capital
+    tase_id: "1082635"
+    tase_company_id: "2101"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: USD
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: apollo
+    name: Apollo Power
+    tase_id: "1082114"
+    tase_company_id: "1074"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: augwind
+    name: Augwind Energy Tech Storage
+    tase_id: "1105907"
+    tase_company_id: "1473"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: electreon
+    name: Electreon Wireless
+    tase_id: "368019"
+    tase_company_id: "368"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: nofar
+    name: Nofar Energy
+    tase_id: "1170877"
+    tase_company_id: "1831"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: meshek
+    name: Meshek Energy - Renewables
+    tase_id: "1166974"
+    tase_company_id: "1803"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: sunflower
+    name: Sunflower Sustainable Investments
+    tase_id: "1098755"
+    tase_company_id: "1062"
+    ir_url: null
+    ir_platform: null
+    priority: low
+    reporting_currency: ILS
+    sector: renewable_energy
+    dual_listed: false
+
+  - slug: sofwave
+    name: Sofwave Medical
+    tase_id: "1175439"
+    tase_company_id: "1886"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: USD
+    sector: medical_devices
+    dual_listed: false
+
+  - slug: brainsway
+    name: Brainsway
+    tase_id: null
+    tase_company_id: "1386"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: USD
+    sector: medical_devices
+    dual_listed: true
