@@ -141,3 +141,58 @@ companies:
     reporting_currency: USD
     sector: medical_devices
     dual_listed: true
+
+  - slug: rimoni
+    name: Rimoni Industries
+    tase_id: null
+    tase_company_id: "76"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: ILS
+    sector: industrial
+    dual_listed: false
+
+  - slug: azrieli
+    name: Azrieli Group
+    tase_id: null
+    tase_company_id: "1420"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: ILS
+    sector: real_estate
+    dual_listed: false
+
+  - slug: cellcom
+    name: Cellcom Israel
+    tase_id: null
+    tase_company_id: "2066"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: ILS
+    sector: telecom
+    dual_listed: false
+
+  - slug: ludan
+    name: Ludan Engineering
+    tase_id: null
+    tase_company_id: "1050"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: ILS
+    sector: engineering
+    dual_listed: false
+
+  - slug: tlsys
+    name: TLSYS
+    tase_id: null
+    tase_company_id: "354"
+    ir_url: null
+    ir_platform: null
+    priority: high
+    reporting_currency: ILS
+    sector: technology
+    dual_listed: false

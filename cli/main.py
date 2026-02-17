@@ -86,7 +86,7 @@ def cmd_list(args):
     print("-" * 90)
 
     for c in companies:
-        print(f"{c.slug:<15} | {c.name:<35} | {c.priority:<8} | {c.tase_id:<10} | {c.reporting_currency:<8}")
+        print(f"{c.slug:<15} | {c.name:<35} | {c.priority:<8} | {(c.tase_id or '-'):<10} | {c.reporting_currency:<8}")
 
     print(f"\nTotal: {len(companies)} companies\n")
 

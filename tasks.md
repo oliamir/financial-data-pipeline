@@ -1,6 +1,6 @@
 # Financial Data Pipeline — Task Tracker
 
-> Last updated: 2026-02-16
+> Last updated: 2026-02-17
 
 ---
 
@@ -23,6 +23,7 @@
 - [x] Watch mode for continuous ingestion (`analyze.py --watch`)
 - [x] Agent persona support (`agent_manager.py`)
 - [x] Smart model routing (Gemini for financials, lighter models for others)
+- [x] Fixed per-provider default model routing in `analyze.py` (was defaulting Ollama to Claude model name)
 
 ### Orchestration & Monitoring
 - [x] `run_pipeline.py` — CLI entrypoint with company/provider/model flags
@@ -34,6 +35,7 @@
 
 ### Companies Processed
 - [x] Sofwave Medical — full scrape + AI analysis
+- [x] Sofwave Medical — 5-year re-download (20/21 reports) + Ollama local analysis (Feb 2026)
 - [x] Apollo Power — full scrape + AI analysis
 - [x] Enlight Renewable Energy — historical data (52+ reports, 2022–2025)
 
@@ -107,6 +109,7 @@
 | Status utilities hardcoded for Sofwave/Apollo | Open | Need to generalize for all companies |
 | Tests are diagnostic, not unit tests | Open | No CI/CD coverage |
 | Gemini API rate limits during bulk analysis | Known | Ollama fallback in place |
+| Ollama `llama3.1` JSON parsing inconsistency | Known | Sometimes returns narrative text instead of JSON; extractor skips these |
 
 ---
 

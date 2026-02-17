@@ -69,7 +69,13 @@ def main():
     
     # Defaults
     if not args.model:
-        args.model = "gemini-2.0-flash" if args.provider == 'google' else "claude-3-5-sonnet-20241022"
+        model_defaults = {
+            'google': 'gemini-2.0-flash',
+            'anthropic': 'claude-3-5-sonnet-20241022',
+            'openai': 'gpt-4o',
+            'ollama': 'llama3.1'
+        }
+        args.model = model_defaults.get(args.provider, 'gemini-2.0-flash')
 
     print(f"======================================================================")
     print(f"AI ANALYST: {company_name}")
