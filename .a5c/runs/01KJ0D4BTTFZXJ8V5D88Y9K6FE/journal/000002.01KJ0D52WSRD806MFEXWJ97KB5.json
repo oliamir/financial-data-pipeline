@@ -1,0 +1,19 @@
+{
+  "type": "EFFECT_REQUESTED",
+  "recordedAt": "2026-02-21T15:30:07.898Z",
+  "data": {
+    "effectId": "01KJ0D52W0N8J3RTJ2ZBJT2M8S",
+    "invocationKey": "finance-pipeline-rebuild:S000001:plan-phase",
+    "invocationHash": "0ddc7ec2dcdef75718d832bfdcebb24d8f9c4b7ecd74008a51c912b866f94fbb",
+    "stepId": "S000001",
+    "taskId": "plan-phase",
+    "kind": "agent",
+    "label": "planning",
+    "taskDefRef": "tasks/01KJ0D52W0N8J3RTJ2ZBJT2M8S/task.json",
+    "labels": [
+      "planning",
+      "phase-1-foundation"
+    ]
+  },
+  "checksum": "adce434451815803112a46e257f94bef0f219c44050df97609f80395084d2c16"
+}

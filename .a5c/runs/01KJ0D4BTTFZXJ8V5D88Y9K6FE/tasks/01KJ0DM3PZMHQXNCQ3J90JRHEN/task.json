@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "2026.01.tasks-v1",
+  "effectId": "01KJ0DM3PZMHQXNCQ3J90JRHEN",
+  "taskId": "__sdk.breakpoint",
+  "invocationKey": "finance-pipeline-rebuild:S000002:__sdk.breakpoint",
+  "stepId": "S000002",
+  "kind": "breakpoint",
+  "title": "breakpoint",
+  "metadata": {
+    "label": "breakpoint",
+    "payload": {
+      "context": {
+        "files": [
+          {
+            "format": "markdown",
+            "label": "Phase Plan",
+            "path": "artifacts/phase-1-foundation-PLAN.md"
+          }
+        ]
+      },
+      "question": "Review plan for Phase 1/9: \"Foundation\". Approve to proceed with implementation?",
+      "title": "Phase 1 Plan Review: Foundation"
+    },
+    "requestedAt": "2026-02-21T15:38:20.255Z"
+  },
+  "inputs": {
+    "label": "breakpoint",
+    "payload": {
+      "context": {
+        "files": [
+          {
+            "format": "markdown",
+            "label": "Phase Plan",
+            "path": "artifacts/phase-1-foundation-PLAN.md"
+          }
+        ]
+      },
+      "question": "Review plan for Phase 1/9: \"Foundation\". Approve to proceed with implementation?",
+      "title": "Phase 1 Plan Review: Foundation"
+    },
+    "requestedAt": "2026-02-21T15:38:20.255Z"
+  }
+}

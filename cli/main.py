@@ -1,196 +1,106 @@
-#!/usr/bin/env python3
+"""Finance CLI -- Typer application entry point.
+
+Usage:
+    finance list [--type TYPE] [--priority PRIORITY]
+    finance status [SLUG] [--failed]
+    finance run <SLUG> [--years N] [--skip-scrape] [--skip-analyze] [--provider PROVIDER]
+    finance run-all [--priority PRIORITY] [--years N]
+    finance build-model <SLUG>
+    finance web [--port PORT]
+    finance scheduler
 """
-Financial Data Pipeline CLI.
-Usage: python -m cli.main <command> [options]
-"""
-import sys
-import os
-import asyncio
-import argparse
 
-# Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+import typer
+from typing import Optional
+
+app = typer.Typer(
+    name="finance",
+    help="Financial data pipeline -- TASE company analysis",
+    no_args_is_help=True,
+)
 
 
-def cmd_run(args):
-    """Run the pipeline for a company or tier."""
-    from src.pipeline.orchestrator import run_pipeline, run_tier
-
-    if args.tier:
-        asyncio.run(run_tier(
-            priority=args.tier,
-            years_back=args.years,
-            skip_scrape=args.skip_scrape,
-            skip_analyze=args.skip_analyze,
-        ))
-    elif args.company:
-        asyncio.run(run_pipeline(
-            company_slug=args.company,
-            years_back=args.years,
-            skip_scrape=args.skip_scrape,
-            skip_analyze=args.skip_analyze,
-            dry_run=args.dry_run,
-        ))
-    else:
-        print("Error: specify --company <slug> or --tier <high|low>")
-        sys.exit(1)
+@app.command()
+def list_companies(
+    company_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by type: us_traded, tase_traded, private"),
+    priority: Optional[str] = typer.Option(None, "--priority", "-p", help="Filter by priority: high, low"),
+) -> None:
+    """List all registered companies."""
+    from cli.commands.list_cmd import run_list
+    run_list(company_type=company_type, priority=priority)
 
 
-def cmd_status(args):
-    """Show pipeline status."""
-    from src.registry.company import CompanyRegistry
-    from src.storage.file_manager import FileManager
-
-    registry = CompanyRegistry()
-    companies = registry.all()
-
-    if args.company:
-        companies = [registry.get(args.company)]
-
-    print(f"\n{'COMPANY':<30} | {'PRIORITY':<8} | {'LAST SCRAPE':<20} | {'REPORTS':<8} | {'METRICS':<8} | {'MEMO':<6}")
-    print("-" * 95)
-
-    for c in companies:
-        fm = FileManager(c.slug)
-        meta = fm.load_meta()
-        financials = fm.load_financials()
-        memo = fm.load_memo()
-
-        last_scrape = meta.get("last_scrape", "Never")
-        if last_scrape and last_scrape != "Never":
-            last_scrape = last_scrape[:16]
-
-        reports = meta.get("reports_downloaded", 0)
-        has_memo = "YES" if memo else "NO"
-
-        if args.failed and meta.get("last_scrape_status") != "failed":
-            continue
-
-        print(f"{c.name:<30} | {c.priority:<8} | {last_scrape:<20} | {reports:<8} | {len(financials):<8} | {has_memo:<6}")
-
-    print()
+@app.command(name="status")
+def show_status(
+    slug: Optional[str] = typer.Argument(None, help="Company slug"),
+    failed: bool = typer.Option(False, "--failed", help="Show only failed companies"),
+) -> None:
+    """Show pipeline status for companies."""
+    from cli.commands.status import run_status
+    run_status(slug=slug, failed_only=failed)
 
 
-def cmd_list(args):
-    """List all companies."""
-    from src.registry.company import CompanyRegistry
-
-    registry = CompanyRegistry()
-    companies = registry.all()
-
-    if args.tier:
-        companies = registry.list_by_priority(args.tier)
-
-    print(f"\n{'SLUG':<15} | {'NAME':<35} | {'PRIORITY':<8} | {'TASE ID':<10} | {'CURRENCY':<8}")
-    print("-" * 90)
-
-    for c in companies:
-        print(f"{c.slug:<15} | {c.name:<35} | {c.priority:<8} | {(c.tase_id or '-'):<10} | {c.reporting_currency:<8}")
-
-    print(f"\nTotal: {len(companies)} companies\n")
+@app.command(name="run")
+def run(
+    slug: str = typer.Argument(..., help="Company slug to process"),
+    years: int = typer.Option(5, "--years", "-y", help="Years of history to fetch"),
+    skip_scrape: bool = typer.Option(False, "--skip-scrape", help="Skip scraping/download"),
+    skip_analyze: bool = typer.Option(False, "--skip-analyze", help="Skip AI analysis"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="Force specific AI provider"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Log actions without executing"),
+) -> None:
+    """Run the pipeline for a specific company."""
+    from cli.commands.run import run_pipeline
+    run_pipeline(slug=slug, years_back=years, skip_scrape=skip_scrape,
+                 skip_analyze=skip_analyze, provider=provider, dry_run=dry_run)
 
 
-def cmd_validate(args):
-    """Validate pipeline outputs."""
-    from src.registry.company import CompanyRegistry
-    from src.storage.file_manager import FileManager
-    from src.storage import paths
-    import json
-
-    registry = CompanyRegistry()
-
-    if args.company:
-        companies = [registry.get(args.company)]
-    else:
-        companies = registry.all()
-
-    print(f"\n{'COMPANY':<30} | {'FINANCIALS':<12} | {'MEMO':<12} | {'STATUS'}")
-    print("-" * 80)
-
-    for c in companies:
-        fm = FileManager(c.slug)
-
-        # Check financials
-        csv_path = paths.financials_csv(c.slug)
-        if os.path.exists(csv_path) and os.path.getsize(csv_path) > 50:
-            fin_status = "OK"
-        elif os.path.exists(csv_path):
-            fin_status = "EMPTY"
-        else:
-            fin_status = "MISSING"
-
-        # Check memo
-        memo_path = paths.memo_json(c.slug)
-        if os.path.exists(memo_path):
-            try:
-                with open(memo_path) as f:
-                    memo = json.load(f)
-                memo_status = "OK" if memo.get("executive_summary") else "INCOMPLETE"
-            except:
-                memo_status = "INVALID"
-        else:
-            memo_status = "MISSING"
-
-        overall = "PASS" if fin_status == "OK" and memo_status == "OK" else "FAIL"
-
-        print(f"{c.name:<30} | {fin_status:<12} | {memo_status:<12} | {overall}")
-
-    print()
+@app.command(name="run-all")
+def run_all(
+    priority: Optional[str] = typer.Option(None, "--priority", "-p", help="Filter by priority tier"),
+    years: int = typer.Option(5, "--years", "-y", help="Years of history"),
+) -> None:
+    """Run the pipeline for all companies."""
+    from cli.commands.run import run_all_companies
+    run_all_companies(priority=priority, years_back=years)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Financial Data Pipeline CLI")
-    subparsers = parser.add_subparsers(dest="command")
+@app.command(name="build-model")
+def build_model(
+    slug: str = typer.Argument(..., help="Company slug"),
+) -> None:
+    """Build Excel financial model for a company."""
+    from src.excel import ExcelModelBuilder
 
-    # run
-    run_parser = subparsers.add_parser("run", help="Run the pipeline")
-    run_parser.add_argument("company", nargs="?", help="Company slug")
-    run_parser.add_argument("--tier", choices=["high", "low"], help="Run all companies in tier")
-    run_parser.add_argument("--years", type=int, default=1, help="Years to look back")
-    run_parser.add_argument("--skip-scrape", action="store_true", help="Skip scraping step")
-    run_parser.add_argument("--skip-analyze", action="store_true", help="Skip analysis step")
-    run_parser.add_argument("--dry-run", action="store_true", help="Preview without changes")
+    builder = ExcelModelBuilder(slug)
+    path = builder.build()
+    typer.echo(f"Model saved: {path}")
 
-    # status
-    status_parser = subparsers.add_parser("status", help="Show pipeline status")
-    status_parser.add_argument("company", nargs="?", help="Company slug")
-    status_parser.add_argument("--failed", action="store_true", help="Show only failures")
 
-    # list
-    list_parser = subparsers.add_parser("list", help="List companies")
-    list_parser.add_argument("--tier", choices=["high", "low"], help="Filter by tier")
+@app.command(name="web")
+def web(
+    host: str = typer.Option("0.0.0.0", "--host", help="Host to bind to"),
+    port: int = typer.Option(8050, "--port", help="Port to listen on"),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+) -> None:
+    """Start the web dashboard."""
+    from src.web import run_dashboard
+    run_dashboard(host=host, port=port, debug=debug)
 
-    # validate
-    validate_parser = subparsers.add_parser("validate", help="Validate outputs")
-    validate_parser.add_argument("company", nargs="?", help="Company slug")
-    validate_parser.add_argument("--all", action="store_true", dest="validate_all")
 
-    # dashboard
-    dash_parser = subparsers.add_parser("dashboard", help="Live status dashboard")
-    dash_parser.add_argument("--tier", choices=["high", "low"], help="Filter by tier")
-    dash_parser.add_argument("--company", help="Single company")
-    dash_parser.add_argument("--watch", nargs="?", const=5, type=int, metavar="SEC",
-                             help="Auto-refresh (default: 5s)")
-    dash_parser.add_argument("--no-files", action="store_true", help="Hide file list")
+@app.command(name="scheduler")
+def scheduler() -> None:
+    """Start the pipeline scheduler."""
+    from src.scheduler import PipelineScheduler
 
-    args = parser.parse_args()
-
-    if args.command == "run":
-        cmd_run(args)
-    elif args.command == "status":
-        cmd_status(args)
-    elif args.command == "list":
-        cmd_list(args)
-    elif args.command == "validate":
-        cmd_validate(args)
-    elif args.command == "dashboard":
-        from cli.dashboard import main as dashboard_main
-        sys.argv = ["dashboard"] + sys.argv[2:]  # pass remaining args
-        dashboard_main()
-    else:
-        parser.print_help()
+    sched = PipelineScheduler()
+    typer.echo("Starting scheduler... Press Ctrl+C to stop.")
+    try:
+        sched.start()
+    except KeyboardInterrupt:
+        sched.stop()
+        typer.echo("Scheduler stopped.")
 
 
 if __name__ == "__main__":
-    main()
+    app()

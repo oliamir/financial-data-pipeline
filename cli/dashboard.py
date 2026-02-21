@@ -247,8 +247,10 @@ def render_dashboard(companies, show_files=True):
             pri_str = f"{DIM}{pri:>4}{RESET}"
 
         name = c.name[:21]
+        # Dual-listing indicator
+        dual = f" {CYAN}{c.us_ticker}{RESET}" if getattr(c, 'dual_listed', False) and getattr(c, 'us_ticker', None) else ""
         lines.append(
-            f"  {name:<22} {pri_str} {scrape_st:>19} {last_scrape:>17} "
+            f"  {name:<22} {pri_str}{dual} {scrape_st:>19} {last_scrape:>17} "
             f"{dl_count:>13} {parse_str:>15} {bar} {metric_str:>17} {memo_str:>15}"
         )
 

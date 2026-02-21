@@ -73,37 +73,65 @@ class ScrapingCoordinator:
         return downloaded
 
     async def _scrape_all_sources(self, years_back: int) -> List[ReportMetadata]:
-        """Scrape TASE first, then IR website as fallback/supplement. Merge results."""
+        """Scrape report sources. For dual-listed companies with IR URLs,
+        prioritize the IR website (English reports, more detail).
+        For TASE-only companies, use TASE Maya as primary source."""
         all_reports: List[ReportMetadata] = []
 
-        # Source 1: TASE Maya
-        tase_reports = await self._scrape_tase_with_retry(years_back)
-        if tase_reports:
-            all_reports.extend(tase_reports)
+        if self.company.dual_listed and self.company.ir_url:
+            # Dual-listed: IR website is primary source
             print(
-                f"  [Coordinator] TASE returned {len(tase_reports)} reports",
+                f"  [Coordinator] Dual-listed company ({self.company.us_ticker or '?'} on "
+                f"{self.company.us_exchange or '?'}), using IR website as primary source",
                 flush=True,
             )
-
-        # Source 2: IR Website (if company has an ir_url configured)
-        if self.company.ir_url:
             ir_reports = await self._scrape_ir_with_retry(years_back)
             if ir_reports:
-                # Merge, avoiding URL-level duplicates across sources
+                all_reports.extend(ir_reports)
+                print(
+                    f"  [Coordinator] IR website returned {len(ir_reports)} reports",
+                    flush=True,
+                )
+
+            # Also scrape TASE as supplement (may have Hebrew-only filings)
+            tase_reports = await self._scrape_tase_with_retry(years_back)
+            if tase_reports:
                 before = len(all_reports)
-                all_reports = self._merge_cross_source(all_reports, ir_reports)
+                all_reports = self._merge_cross_source(all_reports, tase_reports)
                 added = len(all_reports) - before
                 print(
-                    f"  [Coordinator] IR website returned {len(ir_reports)} reports "
+                    f"  [Coordinator] TASE returned {len(tase_reports)} reports "
                     f"({added} new after cross-source dedup)",
                     flush=True,
                 )
         else:
-            print(
-                f"  [Coordinator] No ir_url configured for {self.company.name}, "
-                f"skipping IR scrape",
-                flush=True,
-            )
+            # TASE-only: TASE Maya is primary source
+            tase_reports = await self._scrape_tase_with_retry(years_back)
+            if tase_reports:
+                all_reports.extend(tase_reports)
+                print(
+                    f"  [Coordinator] TASE returned {len(tase_reports)} reports",
+                    flush=True,
+                )
+
+            # IR website as supplement if configured
+            if self.company.ir_url:
+                ir_reports = await self._scrape_ir_with_retry(years_back)
+                if ir_reports:
+                    before = len(all_reports)
+                    all_reports = self._merge_cross_source(all_reports, ir_reports)
+                    added = len(all_reports) - before
+                    print(
+                        f"  [Coordinator] IR website returned {len(ir_reports)} reports "
+                        f"({added} new after cross-source dedup)",
+                        flush=True,
+                    )
+            else:
+                print(
+                    f"  [Coordinator] No ir_url configured for {self.company.name}, "
+                    f"skipping IR scrape",
+                    flush=True,
+                )
 
         return all_reports
 

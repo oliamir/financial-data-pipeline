@@ -1,17 +1,21 @@
 companies:
   - slug: enlight
     name: Enlight Renewable Energy
+    company_type: tase_traded
     tase_id: "720"
     tase_company_id: "720"
+    us_ticker: ENLT
+    us_exchange: NASDAQ
     ir_url: https://enlightenergy.co.il/investors/financial-reports/
     ir_platform: wordpress
     priority: high
     reporting_currency: ILS
     sector: renewable_energy
-    dual_listed: false
+    dual_listed: true
 
   - slug: energix
     name: Energix - Renewable Energies
+    company_type: tase_traded
     tase_id: "1123355"
     tase_company_id: "1581"
     ir_url: null
@@ -23,10 +27,13 @@ companies:
 
   - slug: ormat
     name: Ormat Technologies
+    company_type: tase_traded
     tase_id: "1134402"
     tase_company_id: "2250"
-    ir_url: null
-    ir_platform: null
+    us_ticker: ORA
+    us_exchange: NYSE
+    ir_url: https://investor.ormat.com/
+    ir_platform: generic
     priority: low
     reporting_currency: USD
     sector: renewable_energy
@@ -34,6 +41,7 @@ companies:
 
   - slug: doral
     name: Doral Renewable Energy Resources
+    company_type: tase_traded
     tase_id: "1166768"
     tase_company_id: "1801"
     ir_url: null
@@ -45,17 +53,21 @@ companies:
 
   - slug: ellomay
     name: Ellomay Capital
+    company_type: tase_traded
     tase_id: "1082635"
     tase_company_id: "2101"
-    ir_url: null
-    ir_platform: null
+    us_ticker: ELLO
+    us_exchange: NYSE
+    ir_url: https://www.ellomay.com/investor-relations
+    ir_platform: generic
     priority: low
     reporting_currency: USD
     sector: renewable_energy
-    dual_listed: false
+    dual_listed: true
 
   - slug: apollo
     name: Apollo Power
+    company_type: tase_traded
     tase_id: "1082114"
     tase_company_id: "1074"
     ir_url: null
@@ -67,6 +79,7 @@ companies:
 
   - slug: augwind
     name: Augwind Energy Tech Storage
+    company_type: tase_traded
     tase_id: "1105907"
     tase_company_id: "1473"
     ir_url: null
@@ -78,6 +91,7 @@ companies:
 
   - slug: electreon
     name: Electreon Wireless
+    company_type: tase_traded
     tase_id: "368019"
     tase_company_id: "368"
     ir_url: null
@@ -89,6 +103,7 @@ companies:
 
   - slug: nofar
     name: Nofar Energy
+    company_type: tase_traded
     tase_id: "1170877"
     tase_company_id: "1831"
     ir_url: null
@@ -100,6 +115,7 @@ companies:
 
   - slug: meshek
     name: Meshek Energy - Renewables
+    company_type: tase_traded
     tase_id: "1166974"
     tase_company_id: "1803"
     ir_url: null
@@ -111,6 +127,7 @@ companies:
 
   - slug: sunflower
     name: Sunflower Sustainable Investments
+    company_type: tase_traded
     tase_id: "1098755"
     tase_company_id: "1062"
     ir_url: null
@@ -122,21 +139,27 @@ companies:
 
   - slug: sofwave
     name: Sofwave Medical
+    company_type: tase_traded
     tase_id: "1175439"
     tase_company_id: "1886"
-    ir_url: null
-    ir_platform: null
+    us_ticker: SOFW
+    us_exchange: NASDAQ
+    ir_url: https://sofwave.com/investors
+    ir_platform: generic
     priority: high
     reporting_currency: USD
     sector: medical_devices
-    dual_listed: false
+    dual_listed: true
 
   - slug: brainsway
     name: Brainsway
+    company_type: tase_traded
     tase_id: null
     tase_company_id: "1386"
-    ir_url: null
-    ir_platform: null
+    us_ticker: BWAY
+    us_exchange: NASDAQ
+    ir_url: https://investors.brainsway.com/financial-reports
+    ir_platform: generic
     priority: high
     reporting_currency: USD
     sector: medical_devices
@@ -144,6 +167,7 @@ companies:
 
   - slug: rimoni
     name: Rimoni Industries
+    company_type: tase_traded
     tase_id: null
     tase_company_id: "76"
     ir_url: null
@@ -155,6 +179,7 @@ companies:
 
   - slug: azrieli
     name: Azrieli Group
+    company_type: tase_traded
     tase_id: null
     tase_company_id: "1420"
     ir_url: null
@@ -166,6 +191,7 @@ companies:
 
   - slug: cellcom
     name: Cellcom Israel
+    company_type: tase_traded
     tase_id: null
     tase_company_id: "2066"
     ir_url: null
@@ -177,6 +203,7 @@ companies:
 
   - slug: ludan
     name: Ludan Engineering
+    company_type: tase_traded
     tase_id: null
     tase_company_id: "1050"
     ir_url: null
@@ -188,6 +215,7 @@ companies:
 
   - slug: tlsys
     name: TLSYS
+    company_type: tase_traded
     tase_id: null
     tase_company_id: "354"
     ir_url: null

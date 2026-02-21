@@ -1,91 +1,101 @@
-import os
+"""CRUD operations for company artifacts."""
+
 import json
-import csv
-from typing import List, Optional
+from pathlib import Path
+from typing import Optional, List
 from datetime import datetime
 
-from ..models.financial import FinancialMetric
+from ..models.financial import FinancialPeriod
 from ..models.memo import InvestmentMemo
-from ..models.revision import RevisionEntry
-from . import paths
-
-
-FINANCIALS_COLUMNS = [
-    "company_slug", "metric_name", "category", "period_type",
-    "period_end_date", "fiscal_year", "value", "unit",
-    "value_ils", "value_usd", "source_file", "source_provider",
-    "extracted_at", "confidence",
-]
-
+from ..models.kpi import KPIMetrics
+from ..models.research import MarketResearch
+from .paths import CompanyPaths
 
 class FileManager:
-    def __init__(self, slug: str):
+    """Manages reading/writing company artifacts to disk."""
+
+    def __init__(self, slug: str, data_root: Optional[Path] = None):
         self.slug = slug
-        # Ensure directories exist
-        paths.company_dir(slug)
-        paths.reports_dir(slug)
+        self.paths = CompanyPaths(slug, data_root)
+        self.paths.ensure_dirs()
 
-    # --- Financials CSV ---
+    # --- Financial Periods ---
 
-    def load_financials(self) -> List[dict]:
-        csv_path = paths.financials_csv(self.slug)
-        if not os.path.exists(csv_path):
+    def load_financials(self) -> List[FinancialPeriod]:
+        path = self.paths.financials_json
+        if not path.exists():
             return []
-        rows = []
-        with open(csv_path, "r", newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                # Convert numeric fields
-                for field in ["value", "value_ils", "value_usd", "confidence", "fiscal_year"]:
-                    if row.get(field):
-                        try:
-                            row[field] = float(row[field])
-                        except (ValueError, TypeError):
-                            pass
-                rows.append(row)
-        return rows
+        data = json.loads(path.read_text())
+        return [FinancialPeriod.model_validate(item) for item in data]
 
-    def append_financials(self, metrics: List[FinancialMetric]):
-        csv_path = paths.financials_csv(self.slug)
-        file_exists = os.path.exists(csv_path)
+    def save_financials(self, periods: List[FinancialPeriod]) -> None:
+        data = [p.model_dump(mode="json") for p in periods]
+        self.paths.financials_json.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False, default=str)
+        )
 
-        with open(csv_path, "a", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=FINANCIALS_COLUMNS)
-            if not file_exists:
-                writer.writeheader()
-            for metric in metrics:
-                writer.writerow(metric.to_dict())
+    def append_financial(self, period: FinancialPeriod) -> None:
+        existing = self.load_financials()
+        replaced = False
+        for i, p in enumerate(existing):
+            if p.fiscal_year == period.fiscal_year and p.period_type == period.period_type:
+                existing[i] = period
+                replaced = True
+                break
+        if not replaced:
+            existing.append(period)
+        self.save_financials(existing)
 
-    # --- Investment Memo JSON ---
+    # --- Investment Memo ---
 
-    def load_memo(self) -> Optional[dict]:
-        memo_path = paths.memo_json(self.slug)
-        if not os.path.exists(memo_path):
+    def load_memo(self) -> Optional[InvestmentMemo]:
+        path = self.paths.memo_json
+        if not path.exists():
             return None
-        with open(memo_path, "r") as f:
-            return json.load(f)
+        data = json.loads(path.read_text())
+        return InvestmentMemo.model_validate(data)
 
-    def save_memo(self, memo: InvestmentMemo):
-        memo_path = paths.memo_json(self.slug)
-        with open(memo_path, "w") as f:
-            json.dump(memo.to_dict(), f, indent=2, ensure_ascii=False)
+    def save_memo(self, memo: InvestmentMemo) -> None:
+        self.paths.memo_json.write_text(
+            json.dumps(memo.model_dump(mode="json"), indent=2, ensure_ascii=False, default=str)
+        )
 
-    # --- Revisions JSONL ---
+    def save_memo_markdown(self, markdown: str) -> None:
+        self.paths.memo_md.write_text(markdown)
 
-    def append_revision(self, entry: RevisionEntry):
-        jsonl_path = paths.revisions_jsonl(self.slug)
-        with open(jsonl_path, "a") as f:
-            f.write(json.dumps(entry.to_dict(), ensure_ascii=False) + "\n")
+    # --- KPI Metrics ---
 
-    def append_revisions(self, entries: List[RevisionEntry]):
-        for entry in entries:
-            self.append_revision(entry)
+    def load_kpis(self) -> Optional[KPIMetrics]:
+        path = self.paths.kpi_json
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text())
+        return KPIMetrics.model_validate(data)
+
+    def save_kpis(self, kpi: KPIMetrics) -> None:
+        self.paths.kpi_json.write_text(
+            json.dumps(kpi.model_dump(mode="json"), indent=2, ensure_ascii=False)
+        )
+
+    # --- Market Research ---
+
+    def load_research(self) -> Optional[MarketResearch]:
+        path = self.paths.research_json
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text())
+        return MarketResearch.model_validate(data)
+
+    def save_research(self, research: MarketResearch) -> None:
+        self.paths.research_json.write_text(
+            json.dumps(research.model_dump(mode="json"), indent=2, ensure_ascii=False)
+        )
 
     # --- Meta JSON (scraping inventory) ---
 
     def load_meta(self) -> dict:
-        meta_path = paths.meta_json(self.slug)
-        if not os.path.exists(meta_path):
+        path = self.paths.meta_json
+        if not path.exists():
             return {
                 "last_scrape": None,
                 "last_scrape_status": None,
@@ -95,16 +105,17 @@ class FileManager:
                 "known_reports": {},
                 "processed_files": [],
             }
-        with open(meta_path, "r") as f:
-            return json.load(f)
+        return json.loads(path.read_text())
 
-    def save_meta(self, meta: dict):
-        meta_path = paths.meta_json(self.slug)
-        with open(meta_path, "w") as f:
-            json.dump(meta, f, indent=2, ensure_ascii=False)
+    def save_meta(self, meta: dict) -> None:
+        self.paths.meta_json.write_text(
+            json.dumps(meta, indent=2, ensure_ascii=False, default=str)
+        )
 
-    def update_scrape_status(self, reports_found: int, reports_downloaded: int,
-                              failed: List[str], status: str = "success"):
+    def update_scrape_status(
+        self, reports_found: int, reports_downloaded: int,
+        failed: List[str], status: str = "success"
+    ) -> None:
         meta = self.load_meta()
         meta["last_scrape"] = datetime.now().isoformat()
         meta["last_scrape_status"] = status
@@ -113,31 +124,23 @@ class FileManager:
         meta["failed_downloads"] = failed
         self.save_meta(meta)
 
-    def mark_processed(self, file_path: str):
+    def mark_processed(self, file_path: str) -> None:
         meta = self.load_meta()
-        if file_path not in meta.get("processed_files", []):
-            meta.setdefault("processed_files", []).append(file_path)
+        processed = meta.setdefault("processed_files", [])
+        if file_path not in processed:
+            processed.append(file_path)
             self.save_meta(meta)
 
     def is_processed(self, file_path: str) -> bool:
         meta = self.load_meta()
         return file_path in meta.get("processed_files", [])
 
-    def get_unprocessed_reports(self) -> List[str]:
-        """Return list of report file paths that haven't been processed yet."""
-        report_dir = paths.reports_dir(self.slug)
-        if not os.path.exists(report_dir):
+    def get_unprocessed_reports(self) -> List[Path]:
+        if not self.paths.reports_dir.exists():
             return []
-
         meta = self.load_meta()
         processed = set(meta.get("processed_files", []))
-        unprocessed = []
-
-        for filename in sorted(os.listdir(report_dir)):
-            if filename.startswith("."):
-                continue
-            full_path = os.path.join(report_dir, filename)
-            if os.path.isfile(full_path) and full_path not in processed:
-                unprocessed.append(full_path)
-
-        return unprocessed
+        return sorted([
+            f for f in self.paths.reports_dir.iterdir()
+            if f.is_file() and not f.name.startswith(".") and str(f) not in processed
+        ])

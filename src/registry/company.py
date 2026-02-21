@@ -16,6 +16,8 @@ class Company:
     reporting_currency: str
     sector: str
     dual_listed: bool
+    us_ticker: Optional[str] = None
+    us_exchange: Optional[str] = None   # "NASDAQ", "NYSE", etc.
 
 
 class CompanyRegistry:
@@ -44,6 +46,8 @@ class CompanyRegistry:
                 reporting_currency=entry.get("reporting_currency", "ILS"),
                 sector=entry.get("sector", ""),
                 dual_listed=entry.get("dual_listed", False),
+                us_ticker=entry.get("us_ticker"),
+                us_exchange=entry.get("us_exchange"),
             )
             self.companies[company.slug] = company
 
@@ -62,6 +66,9 @@ class CompanyRegistry:
 
     def all(self) -> List[Company]:
         return list(self.companies.values())
+
+    def list_dual_listed(self) -> List[Company]:
+        return [c for c in self.companies.values() if c.dual_listed]
 
     def slugs(self) -> List[str]:
         return list(self.companies.keys())

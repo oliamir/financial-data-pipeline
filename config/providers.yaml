@@ -12,6 +12,7 @@ providers:
     host_env: OLLAMA_HOST
     host_default: "http://localhost:11434"
     fallback_model: llama3.1
+    auto_detect_models: true
 
   anthropic:
     type: anthropic
@@ -24,3 +25,18 @@ providers:
     model: gpt-4o
     api_key_env: OPENAI_API_KEY
     enabled: false
+
+routing:
+  classify:
+    primary: ollama
+    fallback: [gemini]
+  extract:
+    primary: ollama
+    fallback: [gemini]
+    validation: gemini
+  memo:
+    primary: gemini
+    fallback: [ollama]
+  research:
+    primary: gemini
+    fallback: []

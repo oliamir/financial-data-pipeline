@@ -1,39 +1,58 @@
-import os
+"""Centralized path conventions for data/companies/<slug>/."""
 
-# Project root is two levels up from src/storage/
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data", "companies")
+from pathlib import Path
+from typing import Optional
 
+class CompanyPaths:
+    """All file paths for a single company's data."""
 
-def company_dir(slug: str) -> str:
-    path = os.path.join(DATA_DIR, slug)
-    os.makedirs(path, exist_ok=True)
-    return path
+    def __init__(self, slug: str, data_root: Optional[Path] = None):
+        if data_root is None:
+            data_root = Path(__file__).resolve().parent.parent.parent / "data" / "companies"
+        self.slug = slug
+        self.root = data_root / slug
+        self.reports_dir = self.root / "reports"
 
+    def ensure_dirs(self) -> None:
+        """Create all required directories."""
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.reports_dir.mkdir(parents=True, exist_ok=True)
 
-def reports_dir(slug: str) -> str:
-    path = os.path.join(company_dir(slug), "reports")
-    os.makedirs(path, exist_ok=True)
-    return path
+    @property
+    def financials_json(self) -> Path:
+        return self.root / "financials.json"
 
+    @property
+    def memo_md(self) -> Path:
+        return self.root / "Investment_Memo.md"
 
-def financials_csv(slug: str) -> str:
-    return os.path.join(company_dir(slug), "financials.csv")
+    @property
+    def memo_json(self) -> Path:
+        return self.root / "memo.json"
 
+    @property
+    def model_xlsx(self) -> Path:
+        return self.root / "Financial_Model.xlsx"
 
-def memo_json(slug: str) -> str:
-    return os.path.join(company_dir(slug), "memo.json")
+    @property
+    def meta_json(self) -> Path:
+        return self.root / "meta.json"
 
+    @property
+    def research_json(self) -> Path:
+        return self.root / "research.json"
 
-def revisions_jsonl(slug: str) -> str:
-    return os.path.join(company_dir(slug), "revisions.jsonl")
+    @property
+    def kpi_json(self) -> Path:
+        return self.root / "kpi.json"
 
+    def report_path(self, year: int, period: str, report_id: str, ext: str = "pdf") -> Path:
+        """Path for a specific report file."""
+        filename = f"{year}_{period}_{report_id}.{ext}"
+        return self.reports_dir / filename
 
-def meta_json(slug: str) -> str:
-    return os.path.join(company_dir(slug), "meta.json")
-
-
-def report_path(slug: str, year: int, period: str, report_id: str, ext: str = "pdf") -> str:
-    """Build path for a specific report file."""
-    filename = f"{year}_{period}_{report_id}.{ext}"
-    return os.path.join(reports_dir(slug), filename)
+    def period_dir(self, year: int, period: str) -> Path:
+        """Directory for period-specific downloads (for Drive upload)."""
+        d = self.root / f"{year}-{period}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d

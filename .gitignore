@@ -10,3 +10,15 @@ archive/
 token.pickle
 credentials.json
 output/
+
+# v3 additions
+data/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+poetry.lock
+.mypy_cache/
+htmlcov/
+.coverage
