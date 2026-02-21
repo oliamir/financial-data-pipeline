@@ -17,6 +17,7 @@ def run_pipeline(
     skip_analyze: bool = typer.Option(False, "--skip-analyze", help="Skip AI analysis"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="Force specific AI provider"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Log actions without executing"),
+    initial_research: bool = False,
 ) -> None:
     """Run the pipeline for a specific company."""
     from src.pipeline.runner import run_company
@@ -31,6 +32,7 @@ def run_pipeline(
             skip_analyze=skip_analyze,
             provider_override=provider,
             dry_run=dry_run,
+            initial_research=initial_research,
         ))
 
         # Display results

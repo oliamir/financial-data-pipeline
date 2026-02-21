@@ -7,13 +7,13 @@ from typing import List, Dict, Any
 from ..models.company import Company
 
 def _find_project_root() -> Path:
-    """Walk up from this file to find project root (contains pyproject.toml or config/)."""
+    """Walk up from this file to find project root (contains pyproject.toml)."""
     current = Path(__file__).resolve().parent
-    for _ in range(5):
-        if (current / "config").is_dir():
+    for _ in range(10):
+        if (current / "pyproject.toml").is_file():
             return current
         current = current.parent
-    raise FileNotFoundError("Could not find project root")
+    raise FileNotFoundError("Could not find project root (no pyproject.toml found)")
 
 def _load_yaml(filename: str) -> dict:
     """Load a YAML file from config/ directory."""

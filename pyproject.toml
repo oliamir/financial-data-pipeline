@@ -46,6 +46,9 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "live: tests that hit live external services/websites",
+]
 
 [tool.ruff]
 line-length = 120

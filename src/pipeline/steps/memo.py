@@ -1,14 +1,16 @@
 """Pipeline step: generate/update investment memo.
 
 Creates or updates a 13-section investment memo from financial data
-and raw document content.
+and raw document content. Tracks revisions with version history.
 """
 
 import json
+import os
+from datetime import datetime
 from typing import Optional
 
 from ...ai.task_router import TaskRouter, AITaskType
-from ...models.memo import InvestmentMemo
+from ...models.memo import InvestmentMemo, MemoRevision
 from ...utils.json_fix import extract_json_from_response
 from ...utils.logging import get_logger
 
@@ -56,13 +58,18 @@ Return ONLY valid JSON."""
 
 UPDATE_MEMO_PROMPT = """You are a senior financial analyst updating an investment memo with new data.
 
-CURRENT MEMO:
+CURRENT MEMO (v{version}):
 {current_memo}
+
+NEW DOCUMENT: {filename}
 
 Update the memo based on the new financial report. Preserve existing analysis where still valid,
 but update financial figures and revise thesis if warranted.
 
-Return the COMPLETE updated memo as JSON (same format as original).
+Return the COMPLETE updated memo as JSON (same format as original), plus these additional fields:
+  "changes_summary": "2-3 sentence summary of what changed vs the previous version",
+  "thesis_impact": "positive" or "negative" or "neutral"
+
 Return ONLY valid JSON."""
 
 
@@ -72,7 +79,7 @@ def generate_memo(
     company_slug: str,
     current_memo: Optional[InvestmentMemo] = None,
 ) -> Optional[InvestmentMemo]:
-    """Generate or update an investment memo.
+    """Generate or update an investment memo with versioning.
 
     Args:
         router: AI task router.
@@ -83,9 +90,17 @@ def generate_memo(
     Returns:
         InvestmentMemo if generation succeeds.
     """
+    filename = os.path.basename(file_path)
+
     if current_memo:
+        # Exclude initial_research from the memo dump sent to LLM (too large)
+        memo_data = current_memo.model_dump(mode="json")
+        memo_data.pop("initial_research", None)
+        memo_data.pop("revisions", None)
         prompt = UPDATE_MEMO_PROMPT.format(
-            current_memo=json.dumps(current_memo.model_dump(mode="json"), indent=2)
+            version=current_memo.version,
+            current_memo=json.dumps(memo_data, indent=2),
+            filename=filename,
         )
     else:
         prompt = MEMO_PROMPT
@@ -103,11 +118,41 @@ def generate_memo(
             logger.error("Failed to parse memo JSON")
             return None
 
+        # Extract revision tracking fields before model validation
+        changes_summary = data.pop("changes_summary", "")
+        thesis_impact = data.pop("thesis_impact", "neutral")
+
         data["company_slug"] = company_slug
+
+        if current_memo:
+            # Preserve fields that shouldn't be overwritten
+            new_version = current_memo.version + 1
+            data["version"] = new_version
+
+            # Preserve initial research
+            data["initial_research"] = current_memo.initial_research.model_dump(mode="json")
+
+            # Carry over existing revisions and append new one
+            revisions = [r.model_dump(mode="json") for r in current_memo.revisions]
+            revisions.append(MemoRevision(
+                version=new_version,
+                date=datetime.now().strftime("%Y-%m-%d"),
+                source_file=filename,
+                changes_summary=changes_summary,
+                thesis_impact=thesis_impact,
+            ).model_dump(mode="json"))
+            data["revisions"] = revisions
+        else:
+            data["version"] = 1
+            data["revisions"] = []
+
+        data["last_updated"] = datetime.now().isoformat()
+
         memo = InvestmentMemo.model_validate(data)
-        logger.info(f"Generated memo for {company_slug}: {memo.recommendation}")
+        logger.info(f"Generated memo v{memo.version} for {company_slug}: {memo.recommendation}")
         return memo
 
     except Exception as e:
         logger.error(f"Memo generation failed for {company_slug}: {e}")
         return None
+

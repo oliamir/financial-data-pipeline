@@ -15,12 +15,14 @@ from ..config.loader import load_companies, load_providers_config
 from ..models.company import Company
 from ..models.job import PipelineJob, StepResult, StepName
 from ..models.kpi import KPIMetrics
+from ..models.memo import InvestmentMemo
 from ..sources.coordinator import SourceCoordinator
 from ..storage.file_manager import FileManager
 from .steps import classify_document, is_financial_document
 from .steps.extract import extract_financials
 from .steps.memo import generate_memo
 from .steps.kpi import calculate_kpis
+from .steps.initial_research import run_initial_research
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -64,6 +66,7 @@ class PipelineOrchestrator:
         skip_analyze: bool = False,
         skip_upload: bool = True,
         dry_run: bool = False,
+        initial_research: bool = False,
     ) -> PipelineJob:
         """Run the full pipeline.
 
@@ -83,6 +86,10 @@ class PipelineOrchestrator:
         logger.info(f"{'=' * 60}\n")
 
         try:
+            # Stage 0: Initial Research (if requested or first run)
+            if initial_research or (not self.storage.load_memo()):
+                await self._run_initial_research(dry_run)
+
             # Stage 1-2: Discover & Download
             downloaded_files = []
             if not skip_scrape:
@@ -218,6 +225,43 @@ class PipelineOrchestrator:
         self.storage.mark_processed(file_path)
         logger.info(f"  → Done: {filename}")
 
+    async def _run_initial_research(self, dry_run: bool) -> None:
+        """Run strategic initial research with Gemini deep thinking."""
+        # Check if already done
+        existing_memo = self.storage.load_memo()
+        if existing_memo and existing_memo.initial_research.generated_at:
+            logger.info("[0/6] Initial research already completed, skipping")
+            self.job.steps.append(StepResult(
+                step=StepName.INITIAL_RESEARCH,
+                status="skipped",
+                detail="Already completed",
+            ))
+            return
+
+        logger.info(f"[0/6] Running initial strategic research for {self.company.name}...")
+
+        if dry_run:
+            logger.info("  [DRY RUN] Would run 5 strategic research prompts")
+            return
+
+        research = run_initial_research(self.company)
+        if research:
+            memo = existing_memo or InvestmentMemo(company_slug=self.company.slug)
+            memo.initial_research = research
+            self.storage.save_memo(memo)
+            self.job.steps.append(StepResult(
+                step=StepName.INITIAL_RESEARCH,
+                status="success",
+                detail=f"5 prompts completed via {research.model_used}",
+            ))
+            logger.info("  → Initial research saved")
+        else:
+            self.job.steps.append(StepResult(
+                step=StepName.INITIAL_RESEARCH,
+                status="failed",
+                detail="No GOOGLE_API_KEY or provider error",
+            ))
+
     def _find_prior_period(self, financials, current):
         """Find the prior period for growth calculations."""
         for p in financials:
@@ -250,6 +294,7 @@ async def run_company(
     skip_analyze: bool = False,
     provider_override: Optional[str] = None,
     dry_run: bool = False,
+    initial_research: bool = False,
 ) -> PipelineJob:
     """Run pipeline for a single company by slug."""
     companies = load_companies()
@@ -266,6 +311,7 @@ async def run_company(
         skip_scrape=skip_scrape,
         skip_analyze=skip_analyze,
         dry_run=dry_run,
+        initial_research=initial_research,
     )
 
 

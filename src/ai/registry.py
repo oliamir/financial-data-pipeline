@@ -3,9 +3,14 @@
 import os
 from typing import Dict, List, Optional
 
+from dotenv import load_dotenv
+
 from .base import BaseProvider
 from ..config.loader import load_providers_config
 from ..utils.logging import get_logger
+
+# Ensure .env is loaded before reading API keys
+load_dotenv()
 
 logger = get_logger(__name__)
 

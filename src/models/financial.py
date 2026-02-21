@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class IncomeStatement(BaseModel):
     """~25 line items for a professional income statement."""
@@ -137,11 +137,26 @@ class PerShareData(BaseModel):
 class FinancialPeriod(BaseModel):
     """A complete set of financial data for one period."""
     company_slug: str
-    fiscal_year: int
-    period_type: str                                # "FY", "Q1", "Q2", "Q3", "Q4", "H1", "H2", "TTM"
+    fiscal_year: int = 0
+    period_type: str = "FY"                         # "FY", "Q1", "Q2", "Q3", "Q4", "H1", "H2", "TTM"
     period_end_date: Optional[date] = None
     currency: str = "ILS"
     units: str = "thousands"                        # "thousands", "millions", "units"
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def default_currency(cls, v):
+        return v if v is not None else "ILS"
+
+    @field_validator("units", mode="before")
+    @classmethod
+    def default_units(cls, v):
+        return v if v is not None else "thousands"
+
+    @field_validator("period_type", mode="before")
+    @classmethod
+    def default_period_type(cls, v):
+        return v if v is not None else "FY"
 
     income_statement: IncomeStatement = Field(default_factory=IncomeStatement)
     balance_sheet: BalanceSheet = Field(default_factory=BalanceSheet)

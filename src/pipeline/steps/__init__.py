@@ -4,23 +4,26 @@ Classifies documents by type using AI to determine which pipeline
 steps to apply (financial extraction, memo generation, etc.).
 """
 
-from ..ai.base import BaseProvider
-from ..ai.task_router import TaskRouter, AITaskType
-from ..models.document import DocumentType
-from ..utils.logging import get_logger
+from src.ai.base import BaseProvider
+from src.ai.task_router import TaskRouter, AITaskType
+from src.models.document import DocumentType
+from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-CLASSIFY_PROMPT = """Classify this document into one of these categories:
-- financial_report (income statement, balance sheet, cash flow)
-- quarterly_report (Q1/Q2/Q3/Q4 financial reports)
-- annual_report (full-year financial report)
-- board_report (board of directors report)
-- presentation (investor presentation)
-- press_release (earnings press release)
-- prospectus (offering prospectus)
+CLASSIFY_PROMPT = """Classify this document. It may be in Hebrew or English.
+Look for financial tables (דוח כספי), income/loss (רווח/הפסד), balance sheet (מאזן).
+
+Categories:
+- financial_report (has income statement, balance sheet, or cash flow data)
+- quarterly_report (Q1/Q2/Q3/Q4 financial report)
+- annual_report (full-year financial report / דוח שנתי)
+- board_report (board of directors report / דוח דירקטוריון)
+- presentation (investor presentation / מצגת)
+- press_release (press release / הודעה לעיתונות)
 - other (anything else)
 
+If the document contains financial statements with numbers, classify as financial_report.
 Respond with ONLY the category name, nothing else."""
 
 

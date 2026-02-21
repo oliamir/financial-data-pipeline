@@ -59,6 +59,10 @@ class FileManager:
         self.paths.memo_json.write_text(
             json.dumps(memo.model_dump(mode="json"), indent=2, ensure_ascii=False, default=str)
         )
+        # Auto-render professional markdown
+        from ..memo.renderer import MemoRenderer
+        md = MemoRenderer.render(memo)
+        self.save_memo_markdown(md)
 
     def save_memo_markdown(self, markdown: str) -> None:
         self.paths.memo_md.write_text(markdown)

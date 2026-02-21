@@ -4,8 +4,12 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 class StepName(str, Enum):
+    INITIAL_RESEARCH = "initial_research"
     DOWNLOAD = "download"
+    CLASSIFY = "classify"
+    EXTRACT = "extract"
     PARSE = "parse"
+    KPI = "kpi"
     MODEL = "model"
     MEMO = "memo"
     UPLOAD = "upload"
@@ -18,14 +22,17 @@ class StepResult(BaseModel):
     completed_at: Optional[datetime] = None
     duration_seconds: Optional[float] = None
     error: Optional[str] = None
+    detail: Optional[str] = None
     artifacts: List[str] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
 
 class PipelineJob(BaseModel):
     """Tracks a full pipeline run for one company."""
-    job_id: str
+    job_id: str = Field(default_factory=lambda: datetime.now().strftime("%Y%m%d%H%M%S"))
     company_slug: str
     created_at: datetime = Field(default_factory=datetime.now)
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
     status: str = "pending"
     steps: List[StepResult] = Field(default_factory=list)
     requested_steps: List[StepName] = Field(default_factory=list)

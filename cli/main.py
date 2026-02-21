@@ -48,11 +48,13 @@ def run(
     skip_analyze: bool = typer.Option(False, "--skip-analyze", help="Skip AI analysis"),
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="Force specific AI provider"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Log actions without executing"),
+    initial_research: bool = typer.Option(False, "--initial-research", help="Run deep strategic research prompts (Gemini)"),
 ) -> None:
     """Run the pipeline for a specific company."""
     from cli.commands.run import run_pipeline
     run_pipeline(slug=slug, years_back=years, skip_scrape=skip_scrape,
-                 skip_analyze=skip_analyze, provider=provider, dry_run=dry_run)
+                 skip_analyze=skip_analyze, provider=provider, dry_run=dry_run,
+                 initial_research=initial_research)
 
 
 @app.command(name="run-all")
@@ -100,6 +102,75 @@ def scheduler() -> None:
     except KeyboardInterrupt:
         sched.stop()
         typer.echo("Scheduler stopped.")
+
+
+@app.command(name="tase-fetch")
+def tase_fetch(
+    companies: Optional[str] = typer.Option(
+        None,
+        "--companies",
+        "-c",
+        help="Comma-separated company slugs (default: priority pilot list)",
+    ),
+    all_companies: bool = typer.Option(
+        False,
+        "--all-companies",
+        help="Fetch for all TASE companies with a configured tase_company_id",
+    ),
+    years: int = typer.Option(
+        1,
+        "--years",
+        "-y",
+        min=1,
+        max=10,
+        help="Backfill years when no explicit --from-date is provided (1-10)",
+    ),
+    from_date: Optional[str] = typer.Option(
+        None,
+        "--from-date",
+        help="Start date (YYYY-MM-DD). If omitted, uses incremental state or --years.",
+    ),
+    to_date: Optional[str] = typer.Option(
+        None,
+        "--to-date",
+        help="End date (YYYY-MM-DD). Defaults to today.",
+    ),
+    incremental: bool = typer.Option(
+        True,
+        "--incremental/--no-incremental",
+        help="Default on: start from each company's last successful run when available.",
+    ),
+    output_root: str = typer.Option(
+        "downloads/tase_maya",
+        "--output-root",
+        help="Root output directory for downloaded files",
+    ),
+    max_pages: int = typer.Option(
+        120,
+        "--max-pages",
+        min=1,
+        help="Maximum paginated list pages to scan per company",
+    ),
+    headless: bool = typer.Option(
+        True,
+        "--headless/--headed",
+        help="Run browser in headless mode (default: headless)",
+    ),
+) -> None:
+    """Fetch Maya event PDFs/text using headless web scraping."""
+    from cli.commands.tase_fetch import run_tase_fetch
+
+    run_tase_fetch(
+        companies=companies,
+        all_companies=all_companies,
+        years=years,
+        from_date=from_date,
+        to_date=to_date,
+        incremental=incremental,
+        output_root=output_root,
+        max_pages=max_pages,
+        headless=headless,
+    )
 
 
 if __name__ == "__main__":

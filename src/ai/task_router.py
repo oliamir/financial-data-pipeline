@@ -21,6 +21,7 @@ class AITaskType(str, Enum):
     EXTRACT = "extract"
     MEMO = "memo"
     RESEARCH = "research"
+    INITIAL_RESEARCH = "initial_research"
 
 
 class TaskRouter:

@@ -14,49 +14,60 @@ from ...utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-EXTRACT_PROMPT = """Extract ALL financial data from this document into the following JSON structure.
-Use the EXACT field names. Leave fields as null if not found. All monetary values should be in the
-document's reporting currency (state which currency). Use thousands as units unless stated otherwise.
+EXTRACT_PROMPT = """Extract financial data from this document. It may be in Hebrew or English.
+Look for: income statement (דוח רווח והפסד), balance sheet (מאזן), cash flow (דוח תזרימי מזומנים).
+
+Return JSON with these EXACT field names. Use null for missing values. Numbers only (no commas/symbols).
 
 {
-  "company_slug": "<company identifier>",
-  "fiscal_year": <year as integer>,
-  "period_type": "<FY, Q1, Q2, Q3, Q4, H1>",
-  "currency": "<ILS, USD, EUR>",
-  "units": "<thousands, millions>",
+  "fiscal_year": 2024,
+  "period_type": "FY",
+  "currency": "USD",
+  "units": "thousands",
   "income_statement": {
-    "revenue": null, "cost_of_revenue": null, "gross_profit": null,
-    "rd_expense": null, "sga_expense": null, "depreciation_amortization": null,
-    "other_operating_expense": null, "total_operating_expense": null,
-    "operating_income": null, "interest_income": null, "interest_expense": null,
-    "other_income_expense": null, "pretax_income": null,
-    "income_tax": null, "minority_interest": null, "net_income": null,
-    "ebitda": null, "adjusted_ebitda": null,
-    "eps_basic": null, "eps_diluted": null,
-    "weighted_avg_shares_basic": null, "weighted_avg_shares_diluted": null,
+    "revenue": null,
+    "cost_of_revenue": null,
+    "gross_profit": null,
+    "rd_expense": null,
+    "sga_expense": null,
+    "operating_income": null,
+    "interest_expense": null,
+    "pretax_income": null,
+    "income_tax": null,
+    "net_income": null,
+    "ebitda": null,
+    "eps_basic": null,
+    "eps_diluted": null,
     "stock_based_compensation": null
   },
   "balance_sheet": {
-    "cash_and_equivalents": null, "short_term_investments": null,
-    "accounts_receivable": null, "inventory": null, "total_current_assets": null,
-    "ppe_net": null, "goodwill": null, "intangible_assets": null,
-    "total_assets": null, "accounts_payable": null, "short_term_debt": null,
-    "total_current_liabilities": null, "long_term_debt": null,
-    "total_liabilities": null, "total_equity": null,
-    "shares_outstanding": null
+    "cash_and_equivalents": null,
+    "accounts_receivable": null,
+    "inventory": null,
+    "total_current_assets": null,
+    "ppe_net": null,
+    "total_assets": null,
+    "accounts_payable": null,
+    "total_current_liabilities": null,
+    "long_term_debt": null,
+    "total_liabilities": null,
+    "total_equity": null
   },
   "cash_flow": {
-    "net_income": null, "depreciation_amortization": null,
-    "stock_based_compensation": null, "change_in_working_capital": null,
-    "cash_from_operations": null, "capex": null,
-    "acquisitions": null, "cash_from_investing": null,
-    "debt_issued": null, "debt_repaid": null, "dividends_paid": null,
-    "share_repurchases": null, "cash_from_financing": null,
-    "net_change_in_cash": null, "free_cash_flow": null
+    "cash_from_operations": null,
+    "capex": null,
+    "cash_from_investing": null,
+    "cash_from_financing": null,
+    "net_change_in_cash": null,
+    "free_cash_flow": null
   }
 }
 
-Return ONLY valid JSON. No explanations, markdown, or commentary."""
+IMPORTANT:
+- period_type: Q1/Q2/Q3/Q4 for quarterly, FY for annual, H1 for half-year
+- Use the MOST RECENT period's data from the document
+- Negative values use minus sign (e.g. -1234)
+- Return ONLY valid JSON, no markdown, no explanation"""
 
 
 def extract_financials(
