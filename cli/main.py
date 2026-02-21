@@ -1,52 +1,106 @@
 #!/usr/bin/env python3
+"""Financial Data Pipeline CLI (Typer).
+
+Usage:
+    python -m cli.main run <SLUG> [--years N] [--skip-scrape] [--skip-analyze]
+    python -m cli.main run-all [--tier TIER] [--years N]
+    python -m cli.main status [SLUG] [--failed]
+    python -m cli.main list [--tier TIER]
+    python -m cli.main validate [SLUG]
+    python -m cli.main provider [ACTION]
+    python -m cli.main company <ACTION> [SLUG] [--name NAME] [--tase-id ID]
+    python -m cli.main dashboard [SLUG] [--watch N] [--tier TIER]
 """
-Financial Data Pipeline CLI.
-Usage: python -m cli.main <command> [options]
-"""
+
 import sys
 import os
-import asyncio
-import argparse
+from typing import Optional
+
+import typer
 
 # Add project root to path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+app = typer.Typer(
+    name="finance",
+    help="Financial data pipeline -- TASE company analysis",
+    no_args_is_help=True,
+)
 
 
-def cmd_run(args):
-    """Run the pipeline for a company or tier."""
-    from src.pipeline.orchestrator import run_pipeline, run_tier
+# ---------------------------------------------------------------------------
+# run
+# ---------------------------------------------------------------------------
 
-    if args.tier:
-        asyncio.run(run_tier(
-            priority=args.tier,
-            years_back=args.years,
-            skip_scrape=args.skip_scrape,
-            skip_analyze=args.skip_analyze,
-        ))
-    elif args.company:
-        asyncio.run(run_pipeline(
-            company_slug=args.company,
-            years_back=args.years,
-            skip_scrape=args.skip_scrape,
-            skip_analyze=args.skip_analyze,
-            dry_run=args.dry_run,
-        ))
-    else:
-        print("Error: specify --company <slug> or --tier <high|low>")
-        sys.exit(1)
+@app.command(name="run")
+def run(
+    slug: str = typer.Argument(..., help="Company slug to process"),
+    years: int = typer.Option(5, "--years", "-y", help="Years of history to fetch"),
+    skip_scrape: bool = typer.Option(False, "--skip-scrape", help="Skip scraping/download"),
+    skip_analyze: bool = typer.Option(False, "--skip-analyze", help="Skip AI analysis"),
+    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="Force specific AI provider"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Log actions without executing"),
+    initial_research: bool = typer.Option(False, "--initial-research", help="Run deep strategic research prompts (Gemini)"),
+    step: Optional[str] = typer.Option(None, "--step", "-s", help="Run specific steps only (comma-separated: download,parse,model,memo)"),
+    test_mode: bool = typer.Option(False, "--test-mode", help="E2E test: 1 year download+model, full memo"),
+    reprocess: bool = typer.Option(False, "--reprocess", help="Force re-extraction of already processed files"),
+) -> None:
+    """Run the pipeline for a specific company."""
+    from cli.commands.run import run_pipeline
+
+    # Test mode overrides
+    if test_mode:
+        years = 1
+        step = "download,parse,model,memo"
+
+    run_pipeline(
+        slug=slug,
+        years_back=years,
+        skip_scrape=skip_scrape,
+        skip_analyze=skip_analyze,
+        provider=provider,
+        dry_run=dry_run,
+        initial_research=initial_research,
+        step=step,
+        test_mode=test_mode,
+        reprocess=reprocess,
+    )
 
 
-def cmd_status(args):
-    """Show pipeline status."""
+# ---------------------------------------------------------------------------
+# run-all
+# ---------------------------------------------------------------------------
+
+@app.command(name="run-all")
+def run_all(
+    tier: Optional[str] = typer.Option(None, "--tier", "-t", help="Filter by priority: high or low"),
+    years: int = typer.Option(5, "--years", "-y", help="Years of history"),
+) -> None:
+    """Run the pipeline for all companies (or by tier)."""
+    from cli.commands.run import run_all_companies
+    run_all_companies(priority=tier, years_back=years)
+
+
+# ---------------------------------------------------------------------------
+# status
+# ---------------------------------------------------------------------------
+
+@app.command(name="status")
+def show_status(
+    slug: Optional[str] = typer.Argument(None, help="Company slug"),
+    failed: bool = typer.Option(False, "--failed", help="Show only failed companies"),
+) -> None:
+    """Show pipeline status for companies."""
     from src.registry.company import CompanyRegistry
     from src.storage.file_manager import FileManager
 
     registry = CompanyRegistry()
     companies = registry.all()
 
-    if args.company:
-        companies = [registry.get(args.company)]
+    if slug:
+        companies = [registry.get(slug)]
 
     print(f"\n{'COMPANY':<30} | {'PRIORITY':<8} | {'LAST SCRAPE':<20} | {'REPORTS':<8} | {'METRICS':<8} | {'MEMO':<6}")
     print("-" * 95)
@@ -64,7 +118,7 @@ def cmd_status(args):
         reports = meta.get("reports_downloaded", 0)
         has_memo = "YES" if memo else "NO"
 
-        if args.failed and meta.get("last_scrape_status") != "failed":
+        if failed and meta.get("last_scrape_status") != "failed":
             continue
 
         print(f"{c.name:<30} | {c.priority:<8} | {last_scrape:<20} | {reports:<8} | {len(financials):<8} | {has_memo:<6}")
@@ -72,15 +126,22 @@ def cmd_status(args):
     print()
 
 
-def cmd_list(args):
-    """List all companies."""
+# ---------------------------------------------------------------------------
+# list
+# ---------------------------------------------------------------------------
+
+@app.command(name="list")
+def list_companies(
+    tier: Optional[str] = typer.Option(None, "--tier", "-t", help="Filter by priority: high or low"),
+) -> None:
+    """List all registered companies."""
     from src.registry.company import CompanyRegistry
 
     registry = CompanyRegistry()
     companies = registry.all()
 
-    if args.tier:
-        companies = registry.list_by_priority(args.tier)
+    if tier:
+        companies = registry.list_by_priority(tier)
 
     print(f"\n{'SLUG':<15} | {'NAME':<35} | {'PRIORITY':<8} | {'TASE ID':<10} | {'CURRENCY':<8}")
     print("-" * 90)
@@ -91,110 +152,84 @@ def cmd_list(args):
     print(f"\nTotal: {len(companies)} companies\n")
 
 
-def cmd_validate(args):
-    """Validate pipeline outputs."""
-    from src.registry.company import CompanyRegistry
-    from src.storage.file_manager import FileManager
-    from src.storage import paths
-    import json
+# ---------------------------------------------------------------------------
+# validate
+# ---------------------------------------------------------------------------
 
-    registry = CompanyRegistry()
+@app.command(name="validate")
+def validate(
+    slug: Optional[str] = typer.Argument(None, help="Company slug (all if omitted)"),
+) -> None:
+    """Validate extracted data quality."""
+    from cli.commands.validate import run_validate
+    run_validate(slug=slug)
 
-    if args.company:
-        companies = [registry.get(args.company)]
+
+# ---------------------------------------------------------------------------
+# provider
+# ---------------------------------------------------------------------------
+
+@app.command(name="provider")
+def provider_cmd(
+    action: str = typer.Argument("status", help="Action: status or models"),
+) -> None:
+    """Check AI provider health and list available models."""
+    from cli.commands.provider import run_provider_status
+
+    if action in ("status", "models"):
+        run_provider_status()
     else:
-        companies = registry.all()
-
-    print(f"\n{'COMPANY':<30} | {'FINANCIALS':<12} | {'MEMO':<12} | {'STATUS'}")
-    print("-" * 80)
-
-    for c in companies:
-        fm = FileManager(c.slug)
-
-        # Check financials
-        csv_path = paths.financials_csv(c.slug)
-        if os.path.exists(csv_path) and os.path.getsize(csv_path) > 50:
-            fin_status = "OK"
-        elif os.path.exists(csv_path):
-            fin_status = "EMPTY"
-        else:
-            fin_status = "MISSING"
-
-        # Check memo
-        memo_path = paths.memo_json(c.slug)
-        if os.path.exists(memo_path):
-            try:
-                with open(memo_path) as f:
-                    memo = json.load(f)
-                memo_status = "OK" if memo.get("executive_summary") else "INCOMPLETE"
-            except:
-                memo_status = "INVALID"
-        else:
-            memo_status = "MISSING"
-
-        overall = "PASS" if fin_status == "OK" and memo_status == "OK" else "FAIL"
-
-        print(f"{c.name:<30} | {fin_status:<12} | {memo_status:<12} | {overall}")
-
-    print()
+        typer.echo(f"Unknown action: {action}. Use: status, models")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Financial Data Pipeline CLI")
-    subparsers = parser.add_subparsers(dest="command")
+# ---------------------------------------------------------------------------
+# company
+# ---------------------------------------------------------------------------
 
-    # run
-    run_parser = subparsers.add_parser("run", help="Run the pipeline")
-    run_parser.add_argument("company", nargs="?", help="Company slug")
-    run_parser.add_argument("--tier", choices=["high", "low"], help="Run all companies in tier")
-    run_parser.add_argument("--years", type=int, default=1, help="Years to look back")
-    run_parser.add_argument("--skip-scrape", action="store_true", help="Skip scraping step")
-    run_parser.add_argument("--skip-analyze", action="store_true", help="Skip analysis step")
-    run_parser.add_argument("--dry-run", action="store_true", help="Preview without changes")
+@app.command(name="company")
+def company_cmd(
+    action: str = typer.Argument(..., help="Action: add, remove, or list"),
+    slug: Optional[str] = typer.Argument(None, help="Company slug"),
+    name: Optional[str] = typer.Option(None, "--name", help="Company name"),
+    tase_id: Optional[str] = typer.Option(None, "--tase-id", help="TASE ID"),
+    sector: str = typer.Option("other", "--sector", help="Sector"),
+    priority: str = typer.Option("low", "--priority", help="Priority: high or low"),
+    company_type: str = typer.Option("tase_traded", "--type", help="Type: us_traded, tase_traded, private"),
+    us_ticker: Optional[str] = typer.Option(None, "--us-ticker", help="US ticker symbol"),
+) -> None:
+    """Manage the company registry (add, remove, list)."""
+    from cli.commands.company import run_company_add, run_company_remove, run_company_list
 
-    # status
-    status_parser = subparsers.add_parser("status", help="Show pipeline status")
-    status_parser.add_argument("company", nargs="?", help="Company slug")
-    status_parser.add_argument("--failed", action="store_true", help="Show only failures")
-
-    # list
-    list_parser = subparsers.add_parser("list", help="List companies")
-    list_parser.add_argument("--tier", choices=["high", "low"], help="Filter by tier")
-
-    # validate
-    validate_parser = subparsers.add_parser("validate", help="Validate outputs")
-    validate_parser.add_argument("company", nargs="?", help="Company slug")
-    validate_parser.add_argument("--all", action="store_true", dest="validate_all")
-
-    # dashboard
-    dash_parser = subparsers.add_parser("dashboard", help="Rich live status dashboard")
-    dash_parser.add_argument("company", nargs="?", default=None,
-                             help="Company slug (optional positional filter)")
-    dash_parser.add_argument("--tier", choices=["high", "low"], help="Filter by tier")
-    dash_parser.add_argument("--watch", "-w", nargs="?", const=5, type=int,
-                             metavar="SEC",
-                             help="Auto-refresh interval in seconds (default: 5)")
-
-    args = parser.parse_args()
-
-    if args.command == "run":
-        cmd_run(args)
-    elif args.command == "status":
-        cmd_status(args)
-    elif args.command == "list":
-        cmd_list(args)
-    elif args.command == "validate":
-        cmd_validate(args)
-    elif args.command == "dashboard":
-        from cli.dashboard import run_dashboard
-        run_dashboard(
-            slug=args.company,
-            priority=args.tier,
-            watch=args.watch,
-        )
+    if action == "list":
+        run_company_list()
+    elif action == "add":
+        if not all([slug, name, tase_id]):
+            typer.echo("Error: slug, --name, and --tase-id are required for 'add'")
+            raise typer.Exit(1)
+        run_company_add(slug, name, tase_id, sector, priority, company_type, us_ticker)
+    elif action == "remove":
+        if not slug:
+            typer.echo("Error: slug is required for 'remove'")
+            raise typer.Exit(1)
+        run_company_remove(slug)
     else:
-        parser.print_help()
+        typer.echo(f"Unknown action: {action}. Use: add, remove, list")
+
+
+# ---------------------------------------------------------------------------
+# dashboard
+# ---------------------------------------------------------------------------
+
+@app.command(name="dashboard")
+def dashboard(
+    company: Optional[str] = typer.Argument(None, help="Filter to one company slug"),
+    watch: Optional[int] = typer.Option(None, "--watch", "-w", help="Auto-refresh interval in seconds"),
+    tier: Optional[str] = typer.Option(None, "--tier", help="Filter by priority: high or low"),
+) -> None:
+    """Rich terminal dashboard showing pipeline progress."""
+    from cli.dashboard import run_dashboard
+    run_dashboard(slug=company, priority=tier, watch=watch)
 
 
 if __name__ == "__main__":
-    main()
+    app()

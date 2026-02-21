@@ -1,7 +1,7 @@
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
 from ..registry.company import Company, CompanyRegistry
 from ..registry.priority import get_policy
@@ -11,6 +11,16 @@ from ..scrapers.coordinator import ScrapingCoordinator
 from ..storage.file_manager import FileManager
 from ..storage import paths
 from ..models.revision import RevisionEntry
+
+# Canonical step names and their aliases for --step filtering
+STEP_ALIASES = {
+    "download": "download",
+    "scrape": "download",
+    "parse": "extract",
+    "extract": "extract",
+    "model": "model",
+    "memo": "memo",
+}
 
 
 class PipelineOrchestrator:
@@ -30,10 +40,55 @@ class PipelineOrchestrator:
         skip_scrape: bool = False,
         skip_analyze: bool = False,
         dry_run: bool = False,
+        steps: Optional[List[str]] = None,
+        reprocess: bool = False,
     ):
+        """Run the pipeline.
+
+        Args:
+            years_back: How many years of history to fetch.
+            skip_scrape: Skip scraping/download phase.
+            skip_analyze: Skip AI analysis phase.
+            dry_run: Log actions without executing.
+            steps: If provided, only run these steps. Recognized values:
+                   download/scrape, parse/extract, model, memo.
+            reprocess: If True, clear the processed_files list from meta.json
+                       so all reports are re-analyzed.
+        """
+        # Normalize step names via aliases
+        active_steps: Optional[set] = None
+        if steps:
+            active_steps = set()
+            for s in steps:
+                canonical = STEP_ALIASES.get(s.lower())
+                if canonical:
+                    active_steps.add(canonical)
+                else:
+                    print(f"  [WARN] Unknown step '{s}', ignoring. "
+                          f"Valid: {', '.join(STEP_ALIASES.keys())}")
+
+        # When steps are specified, derive skip flags from them
+        if active_steps is not None:
+            if "download" not in active_steps:
+                skip_scrape = True
+            # Analysis steps: extract, model, memo
+            has_analysis = active_steps & {"extract", "model", "memo"}
+            if not has_analysis:
+                skip_analyze = True
+
+        # Handle reprocess: clear processed_files so reports are re-analyzed
+        if reprocess:
+            meta = self.storage.load_meta()
+            cleared = len(meta.get("processed_files", []))
+            meta["processed_files"] = []
+            self.storage.save_meta(meta)
+            print(f"  [REPROCESS] Cleared {cleared} processed file entries")
+
         print(f"\n{'=' * 60}")
         print(f"PIPELINE: {self.company.name}")
         print(f"Priority: {self.company.priority} | Providers: {self.providers.available()}")
+        if active_steps:
+            print(f"Steps: {', '.join(sorted(active_steps))}")
         print(f"{'=' * 60}\n")
 
         # Phase 1: Scrape & Download
@@ -57,7 +112,7 @@ class PipelineOrchestrator:
                 if dry_run:
                     print(f"  [DRY RUN] Would process: {os.path.basename(file_path)}")
                     continue
-                await self._process_report(file_path)
+                await self._process_report(file_path, active_steps=active_steps)
 
             print()
         else:
@@ -67,43 +122,66 @@ class PipelineOrchestrator:
         print(f"[3/3] Pipeline complete")
         self._print_summary()
 
-    async def _process_report(self, file_path: str):
+    async def _process_report(
+        self,
+        file_path: str,
+        active_steps: Optional[set] = None,
+    ):
+        """Process a single report through classify, extract, model, memo.
+
+        Args:
+            file_path: Path to the report file.
+            active_steps: If provided, only execute these steps.
+                          None means run all steps.
+        """
         filename = os.path.basename(file_path)
         print(f"\n  Processing: {filename}")
 
-        try:
-            # 1. Classify
-            print(f"  -> Classifying...")
-            doc_type = self.router.classify(file_path)
-            print(f"     Type: {doc_type}")
+        # Helper to check if a step should run
+        def _should_run(step_name: str) -> bool:
+            if active_steps is None:
+                return True
+            return step_name in active_steps
 
-            if doc_type != "financial_report":
-                self.storage.mark_processed(file_path)
-                print(f"  -> Skipped (not a financial report)")
-                return
+        try:
+            # 1. Classify (always runs if extract is requested, to filter non-financial)
+            if _should_run("extract") or _should_run("model") or _should_run("memo"):
+                print(f"  -> Classifying...")
+                doc_type = self.router.classify(file_path)
+                print(f"     Type: {doc_type}")
+
+                if doc_type != "financial_report":
+                    self.storage.mark_processed(file_path)
+                    print(f"  -> Skipped (not a financial report)")
+                    return
 
             # 2. Extract financials
-            print(f"  -> Extracting financials...")
-            metrics, provider_name = self.router.extract(file_path, self.company.slug)
-            print(f"     Extracted {len(metrics)} metrics via {provider_name}")
+            metrics = []
+            provider_name = ""
+            if _should_run("extract"):
+                print(f"  -> Extracting financials...")
+                metrics, provider_name = self.router.extract(file_path, self.company.slug)
+                print(f"     Extracted {len(metrics)} metrics via {provider_name}")
 
-            if metrics:
-                # 3. Check for revisions
-                existing = self.storage.load_financials()
-                revisions = self._detect_revisions(existing, metrics, filename)
+                if metrics:
+                    # 3. Check for revisions
+                    existing = self.storage.load_financials()
+                    revisions = self._detect_revisions(existing, metrics, filename)
 
-                # 4. Save financials
-                self.storage.append_financials(metrics)
-                if revisions:
-                    self.storage.append_revisions(revisions)
-                    print(f"     Logged {len(revisions)} revisions")
+                    # 4. Save financials (this is the "model" step)
+                    if _should_run("model") or _should_run("extract"):
+                        self.storage.append_financials(metrics)
+                        if revisions:
+                            self.storage.append_revisions(revisions)
+                            print(f"     Logged {len(revisions)} revisions")
 
             # 5. Update memo
-            print(f"  -> Updating investment memo...")
-            current_memo = self.storage.load_memo()
-            memo = self.router.write_memo(file_path, self.company.slug, current_memo)
-            self.storage.save_memo(memo)
-            print(f"     Memo updated (status: {memo.thesis_status})")
+            if _should_run("memo"):
+                print(f"  -> Updating investment memo...")
+                current_memo = self.storage.load_memo()
+                memo = self.router.write_memo(file_path, self.company.slug, current_memo)
+                self.storage.save_memo(memo)
+                print(f"     Memo updated (status: {memo.thesis_status})")
 
             # 6. Mark processed
             self.storage.mark_processed(file_path)
@@ -173,9 +251,22 @@ async def run_pipeline(
     skip_scrape: bool = False,
     skip_analyze: bool = False,
     dry_run: bool = False,
-    provider_override: str = None,
+    provider_override: Optional[str] = None,
+    steps: Optional[List[str]] = None,
+    reprocess: bool = False,
 ):
-    """Convenience function to run the pipeline for a single company."""
+    """Convenience function to run the pipeline for a single company.
+
+    Args:
+        company_slug: Company slug to process.
+        years_back: How many years of history to fetch.
+        skip_scrape: Skip scraping/download phase.
+        skip_analyze: Skip AI analysis phase.
+        dry_run: Log actions without executing.
+        provider_override: Force a specific AI provider (unused in v2, reserved).
+        steps: If provided, only run these steps (download, parse/extract, model, memo).
+        reprocess: If True, clear processed_files before running analysis.
+    """
     registry = CompanyRegistry()
     company = registry.get(company_slug)
 
@@ -187,6 +278,8 @@ async def run_pipeline(
         skip_scrape=skip_scrape,
         skip_analyze=skip_analyze,
         dry_run=dry_run,
+        steps=steps,
+        reprocess=reprocess,
     )
 
 
