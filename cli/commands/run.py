@@ -1,7 +1,7 @@
 """CLI 'run' command — execute the pipeline for companies."""
 
 import asyncio
-from typing import Optional
+from typing import Optional, List
 
 import typer
 from rich.console import Console
@@ -18,11 +18,18 @@ def run_pipeline(
     provider: Optional[str] = typer.Option(None, "--provider", "-p", help="Force specific AI provider"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Log actions without executing"),
     initial_research: bool = False,
+    requested_steps: Optional[List[str]] = None,
+    reprocess: bool = False,
 ) -> None:
     """Run the pipeline for a specific company."""
     from src.pipeline.runner import run_company
 
     console.print(f"[bold]Running pipeline for: {slug}[/bold]")
+
+    if requested_steps:
+        console.print(f"  Steps: {', '.join(requested_steps)}")
+    if reprocess:
+        console.print(f"  [yellow]Mode: REPROCESS (re-analyzing processed files)[/yellow]")
 
     try:
         job = asyncio.run(run_company(
@@ -33,6 +40,8 @@ def run_pipeline(
             provider_override=provider,
             dry_run=dry_run,
             initial_research=initial_research,
+            requested_steps=requested_steps,
+            reprocess=reprocess,
         ))
 
         # Display results
@@ -48,14 +57,16 @@ def run_pipeline(
         console.print(table)
 
         if job.status == "complete":
-            console.print("[green]✓ Pipeline completed successfully[/green]")
+            console.print("[green]Pipeline completed successfully[/green]")
         else:
-            console.print(f"[red]✗ Pipeline {job.status}[/red]")
+            console.print(f"[red]Pipeline {job.status}[/red]")
             if job.error:
                 console.print(f"[red]Error: {job.error}[/red]")
 
     except KeyError as e:
         console.print(f"[red]Error: {e}[/red]")
+    except ValueError as e:
+        console.print(f"[red]Invalid step: {e}[/red]")
     except Exception as e:
         console.print(f"[red]Pipeline error: {e}[/red]")
 

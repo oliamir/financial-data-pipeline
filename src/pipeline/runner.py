@@ -1,13 +1,19 @@
 """V3 Pipeline orchestrator — runs the full pipeline with step tracking.
 
 Coordinates: scrape → classify → extract → KPI → memo → drive upload
-with PipelineJob tracking for progress visibility.
+with PipelineJob tracking, step filtering, and ProgressTracker integration.
+
+Supports:
+    - ``--step download,parse,model,memo`` to run specific steps only
+    - ``--reprocess`` to re-analyze already-processed files
+    - ``--test-mode`` shortcut (1-year download + model + full-research memo)
+    - Real-time progress emission via EventBus/ProgressTracker
 """
 
 import asyncio
 import os
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Set
 
 from ..ai.registry import ProviderRegistry
 from ..ai.task_router import TaskRouter
@@ -28,17 +34,23 @@ from ..utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+# Valid step names for the --step flag
+VALID_STEPS = {
+    "download", "parse", "model", "memo",
+    "initial_research", "upload",
+}
+
+
 class PipelineOrchestrator:
-    """V3 pipeline orchestrator with step tracking and PipelineJob progress.
+    """V3 pipeline orchestrator with step tracking, filtering, and progress.
 
     Stages:
-        1. Discover — find documents from all sources
-        2. Download — fetch reports to local storage
-        3. Classify — AI document classification
-        4. Extract — AI financial data extraction
-        5. KPI — ratio calculations
-        6. Memo — AI investment memo generation
-        7. Upload — Google Drive upload (optional)
+        1. initial_research — web-based strategic research (Gemini)
+        2. download — discover & fetch reports from sources
+        3. parse — classify, extract financials, calculate KPIs (per file)
+        4. model — build Excel financial model
+        5. memo — generate/update investment memo
+        6. upload — Google Drive upload (optional)
     """
 
     def __init__(
@@ -58,6 +70,23 @@ class PipelineOrchestrator:
             company_slug=company.slug,
             started_at=datetime.now(),
         )
+        self._tracker = None
+
+    def _get_tracker(self):
+        """Lazy-load ProgressTracker to avoid import cycles."""
+        if self._tracker is None:
+            try:
+                from ..progress import ProgressTracker
+                self._tracker = ProgressTracker(self.company.slug)
+            except ImportError:
+                pass
+        return self._tracker
+
+    def _should_run_step(self, step: str, requested_steps: Optional[Set[str]]) -> bool:
+        """Check if a step should run based on the filter."""
+        if requested_steps is None:
+            return True
+        return step in requested_steps
 
     async def run(
         self,
@@ -67,8 +96,10 @@ class PipelineOrchestrator:
         skip_upload: bool = True,
         dry_run: bool = False,
         initial_research: bool = False,
+        requested_steps: Optional[List[str]] = None,
+        reprocess: bool = False,
     ) -> PipelineJob:
-        """Run the full pipeline.
+        """Run the pipeline with optional step filtering.
 
         Args:
             years_back: How many years of history to fetch.
@@ -76,51 +107,119 @@ class PipelineOrchestrator:
             skip_analyze: Skip AI analysis (classify, extract, memo).
             skip_upload: Skip Google Drive upload.
             dry_run: Log actions without executing.
+            initial_research: Force initial research even if already done.
+            requested_steps: List of step names to run (None = all).
+                Valid steps: download, parse, model, memo, initial_research, upload
+            reprocess: Re-analyze already-processed files.
 
         Returns:
             PipelineJob with step results.
         """
+        # Convert step list to set for fast lookup
+        step_filter: Optional[Set[str]] = None
+        if requested_steps:
+            step_filter = set(requested_steps)
+            unknown = step_filter - VALID_STEPS
+            if unknown:
+                raise ValueError(
+                    f"Unknown steps: {unknown}. Valid: {sorted(VALID_STEPS)}"
+                )
+            self.job.requested_steps = [
+                StepName(s) for s in requested_steps
+                if s in [e.value for e in StepName]
+            ]
+
         logger.info(f"\n{'=' * 60}")
         logger.info(f"PIPELINE: {self.company.name}")
         logger.info(f"Providers: {self.registry.available()}")
+        if step_filter:
+            logger.info(f"Steps: {sorted(step_filter)}")
+        if reprocess:
+            logger.info("Mode: REPROCESS (re-analyzing processed files)")
         logger.info(f"{'=' * 60}\n")
+
+        # Start progress tracking
+        tracker = self._get_tracker()
+        if tracker:
+            tracker.start_pipeline(requested_steps)
 
         try:
             # Stage 0: Initial Research (if requested or first run)
-            if initial_research or (not self.storage.load_memo()):
-                await self._run_initial_research(dry_run)
+            if self._should_run_step("initial_research", step_filter):
+                if initial_research or (not self.storage.load_memo()):
+                    await self._run_initial_research(dry_run)
+                elif step_filter and "initial_research" in step_filter:
+                    # Explicitly requested even if already done
+                    await self._run_initial_research(dry_run)
+            elif step_filter:
+                logger.info("[0/6] Initial research skipped (not in requested steps)")
 
             # Stage 1-2: Discover & Download
-            downloaded_files = []
-            if not skip_scrape:
-                downloaded_files = await self._run_scrape(years_back, dry_run)
+            if self._should_run_step("download", step_filter) and not skip_scrape:
+                await self._run_scrape(years_back, dry_run)
+            elif not skip_scrape and not step_filter:
+                pass  # Normal flow, scrape already handled above
             else:
-                logger.info("[1/6] Scrape skipped")
+                logger.info("[1/6] Download skipped")
                 self.job.steps.append(StepResult(
                     step=StepName.DOWNLOAD,
                     status="skipped",
                 ))
+                if tracker:
+                    tracker.skip_step("download", "Not in requested steps")
 
-            # Stage 3-6: Analyze
-            if not skip_analyze:
-                await self._run_analysis(dry_run)
+            # Stage 3: Parse (classify + extract + KPI per file)
+            if self._should_run_step("parse", step_filter) and not skip_analyze:
+                await self._run_analysis(dry_run, reprocess=reprocess)
+            elif not skip_analyze and not step_filter:
+                pass  # Normal flow
             else:
-                logger.info("[2/6] Analysis skipped")
+                logger.info("[2/6] Parse/analysis skipped")
+                if tracker:
+                    tracker.skip_step("parse", "Not in requested steps")
+
+            # Stage 4: Model (Excel)
+            if self._should_run_step("model", step_filter):
+                await self._run_model(dry_run)
+
+            # Stage 5: Memo
+            if self._should_run_step("memo", step_filter):
+                # Memo can run independently with web research only
+                if step_filter and "memo" in step_filter and "parse" not in (step_filter or set()):
+                    await self._run_memo_standalone(dry_run)
+
+            # Stage 6: Upload
+            if self._should_run_step("upload", step_filter) and not skip_upload:
+                await self._run_upload(dry_run)
 
             self.job.status = "complete"
+
+            if tracker:
+                tracker.complete_pipeline()
 
         except Exception as e:
             logger.error(f"Pipeline failed: {e}")
             self.job.status = "failed"
             self.job.error = str(e)
 
+            if tracker:
+                tracker.fail_pipeline(str(e))
+
         self.job.finished_at = datetime.now()
         self._print_summary()
+
+        # Cleanup tracker
+        if tracker:
+            tracker.cleanup()
+
         return self.job
 
     async def _run_scrape(self, years_back: int, dry_run: bool) -> List[str]:
         """Run document discovery and download."""
         logger.info("[1/6] Discovering & downloading reports...")
+        tracker = self._get_tracker()
+        if tracker:
+            tracker.start_step("download", "Discovering documents...")
 
         coordinator = SourceCoordinator(
             company=self.company,
@@ -129,6 +228,10 @@ class PipelineOrchestrator:
         )
 
         documents = await coordinator.discover_all()
+
+        if tracker:
+            tracker.update_step("download", f"Discovered {len(documents)} documents")
+
         self.job.steps.append(StepResult(
             step=StepName.DOWNLOAD,
             status="success",
@@ -138,20 +241,49 @@ class PipelineOrchestrator:
         if dry_run:
             for doc in documents:
                 logger.info(f"  [DRY RUN] Would download: {doc.description}")
+            if tracker:
+                tracker.complete_step("download", f"Dry run: {len(documents)} documents")
             return []
 
         results = await coordinator.download_all(documents)
         downloaded = list(results.values())
         logger.info(f"  Downloaded {len(downloaded)} reports\n")
+
+        if tracker:
+            tracker.complete_step("download", f"Downloaded {len(downloaded)} reports")
+
         return downloaded
 
-    async def _run_analysis(self, dry_run: bool) -> None:
-        """Run AI analysis on unprocessed reports."""
-        unprocessed = self.storage.get_unprocessed_reports()
-        logger.info(f"[2/6] Analyzing {len(unprocessed)} unprocessed reports...")
+    async def _run_analysis(self, dry_run: bool, reprocess: bool = False) -> None:
+        """Run AI analysis on reports.
 
-        for file_path in unprocessed:
+        Args:
+            dry_run: Log without executing.
+            reprocess: If True, re-analyze already-processed files too.
+        """
+        if reprocess:
+            # Get ALL report files, not just unprocessed
+            reports_dir = self.storage.paths.reports_dir
+            if reports_dir.exists():
+                all_reports = sorted(reports_dir.glob("*.pdf"))
+                unprocessed = all_reports
+                logger.info(f"[2/6] REPROCESSING all {len(unprocessed)} reports...")
+            else:
+                unprocessed = []
+        else:
+            unprocessed = self.storage.get_unprocessed_reports()
+
+        logger.info(f"[2/6] Analyzing {len(unprocessed)} {'total' if reprocess else 'unprocessed'} reports...")
+
+        tracker = self._get_tracker()
+        if tracker:
+            tracker.start_step("parse", f"Analyzing {len(unprocessed)} reports")
+
+        for i, file_path in enumerate(unprocessed, 1):
             filename = os.path.basename(str(file_path))
+
+            if tracker:
+                tracker.update_step("parse", f"Processing {i}/{len(unprocessed)}: {filename}")
 
             if dry_run:
                 logger.info(f"  [DRY RUN] Would analyze: {filename}")
@@ -161,6 +293,9 @@ class PipelineOrchestrator:
                 await self._process_single_report(str(file_path))
             except Exception as e:
                 logger.error(f"  Failed to process {filename}: {e}")
+
+        if tracker:
+            tracker.complete_step("parse", f"Analyzed {len(unprocessed)} reports")
 
     async def _process_single_report(self, file_path: str) -> None:
         """Process a single report through classify → extract → KPI → memo."""
@@ -225,6 +360,146 @@ class PipelineOrchestrator:
         self.storage.mark_processed(file_path)
         logger.info(f"  → Done: {filename}")
 
+    async def _run_model(self, dry_run: bool) -> None:
+        """Build the Excel financial model."""
+        logger.info("[3/6] Building Excel financial model...")
+
+        tracker = self._get_tracker()
+        if tracker:
+            tracker.start_step("model", "Building Excel model...")
+
+        if dry_run:
+            logger.info("  [DRY RUN] Would build Excel model")
+            if tracker:
+                tracker.complete_step("model", "Dry run")
+            return
+
+        try:
+            from ..excel import ExcelModelBuilder
+            builder = ExcelModelBuilder(self.company.slug)
+            path = builder.build()
+            self.job.steps.append(StepResult(
+                step=StepName.MODEL,
+                status="success",
+                detail=f"Model saved: {os.path.basename(path)}",
+            ))
+            logger.info(f"  → Excel model saved: {path}")
+
+            if tracker:
+                tracker.complete_step("model", f"Saved: {os.path.basename(path)}")
+
+        except Exception as e:
+            logger.error(f"  Excel model build failed: {e}")
+            self.job.steps.append(StepResult(
+                step=StepName.MODEL,
+                status="failed",
+                detail=str(e),
+            ))
+            if tracker:
+                tracker.fail_step("model", str(e))
+
+    async def _run_memo_standalone(self, dry_run: bool) -> None:
+        """Run memo generation independently (web research only, no files needed)."""
+        logger.info("[4/6] Generating investment memo (standalone mode)...")
+
+        tracker = self._get_tracker()
+        if tracker:
+            tracker.start_step("memo", "Generating memo with web research...")
+
+        if dry_run:
+            logger.info("  [DRY RUN] Would generate standalone memo")
+            if tracker:
+                tracker.complete_step("memo", "Dry run")
+            return
+
+        try:
+            # Ensure initial research is available
+            existing_memo = self.storage.load_memo()
+            if not existing_memo or not existing_memo.initial_research.generated_at:
+                logger.info("  Running initial research first...")
+                await self._run_initial_research(dry_run=False)
+                existing_memo = self.storage.load_memo()
+
+            # Find the most recent report file for memo generation
+            reports_dir = self.storage.paths.reports_dir
+            report_files = sorted(reports_dir.glob("*.pdf")) if reports_dir.exists() else []
+
+            if report_files:
+                # Use the most recent file
+                file_path = str(report_files[-1])
+                memo = generate_memo(
+                    self.router, file_path, self.company.slug, existing_memo
+                )
+                if memo:
+                    self.storage.save_memo(memo)
+                    self.job.steps.append(StepResult(
+                        step=StepName.MEMO,
+                        status="success",
+                        detail=f"Standalone memo: {memo.recommendation}",
+                    ))
+                    if tracker:
+                        tracker.complete_step("memo", f"Recommendation: {memo.recommendation}")
+            else:
+                logger.warning("  No report files available for memo generation")
+                self.job.steps.append(StepResult(
+                    step=StepName.MEMO,
+                    status="failed",
+                    detail="No report files available",
+                ))
+                if tracker:
+                    tracker.fail_step("memo", "No report files available")
+
+        except Exception as e:
+            logger.error(f"  Standalone memo failed: {e}")
+            if tracker:
+                tracker.fail_step("memo", str(e))
+
+    async def _run_upload(self, dry_run: bool) -> None:
+        """Upload artifacts to Google Drive."""
+        logger.info("[5/6] Uploading to Google Drive...")
+
+        tracker = self._get_tracker()
+        if tracker:
+            tracker.start_step("upload", "Uploading to Google Drive...")
+
+        if dry_run:
+            logger.info("  [DRY RUN] Would upload to Google Drive")
+            if tracker:
+                tracker.complete_step("upload", "Dry run")
+            return
+
+        try:
+            from ..storage.drive import DriveUploader
+            uploader = DriveUploader()
+            uploader.upload_company_artifacts(self.company.slug)
+            self.job.steps.append(StepResult(
+                step=StepName.UPLOAD,
+                status="success",
+            ))
+            logger.info("  → Upload complete")
+            if tracker:
+                tracker.complete_step("upload", "Upload complete")
+
+        except ImportError:
+            logger.warning("  Drive upload not available (missing credentials)")
+            self.job.steps.append(StepResult(
+                step=StepName.UPLOAD,
+                status="skipped",
+                detail="Drive uploader not available",
+            ))
+            if tracker:
+                tracker.skip_step("upload", "Not available")
+
+        except Exception as e:
+            logger.error(f"  Drive upload failed: {e}")
+            self.job.steps.append(StepResult(
+                step=StepName.UPLOAD,
+                status="failed",
+                detail=str(e),
+            ))
+            if tracker:
+                tracker.fail_step("upload", str(e))
+
     async def _run_initial_research(self, dry_run: bool) -> None:
         """Run strategic initial research with Gemini deep thinking."""
         # Check if already done
@@ -240,8 +515,14 @@ class PipelineOrchestrator:
 
         logger.info(f"[0/6] Running initial strategic research for {self.company.name}...")
 
+        tracker = self._get_tracker()
+        if tracker:
+            tracker.start_step("initial_research", "Running strategic research...")
+
         if dry_run:
             logger.info("  [DRY RUN] Would run 5 strategic research prompts")
+            if tracker:
+                tracker.complete_step("initial_research", "Dry run")
             return
 
         research = run_initial_research(self.company)
@@ -255,12 +536,16 @@ class PipelineOrchestrator:
                 detail=f"5 prompts completed via {research.model_used}",
             ))
             logger.info("  → Initial research saved")
+            if tracker:
+                tracker.complete_step("initial_research", f"Via {research.model_used}")
         else:
             self.job.steps.append(StepResult(
                 step=StepName.INITIAL_RESEARCH,
                 status="failed",
                 detail="No GOOGLE_API_KEY or provider error",
             ))
+            if tracker:
+                tracker.fail_step("initial_research", "No API key or provider error")
 
     def _find_prior_period(self, financials, current):
         """Find the prior period for growth calculations."""
@@ -295,8 +580,25 @@ async def run_company(
     provider_override: Optional[str] = None,
     dry_run: bool = False,
     initial_research: bool = False,
+    requested_steps: Optional[List[str]] = None,
+    reprocess: bool = False,
 ) -> PipelineJob:
-    """Run pipeline for a single company by slug."""
+    """Run pipeline for a single company by slug.
+
+    Args:
+        slug: Company identifier.
+        years_back: Years of history to fetch.
+        skip_scrape: Skip document download.
+        skip_analyze: Skip AI analysis.
+        provider_override: Force a specific AI provider.
+        dry_run: Log without executing.
+        initial_research: Force initial research.
+        requested_steps: List of step names to run (None = all).
+        reprocess: Re-analyze already-processed files.
+
+    Returns:
+        PipelineJob with results.
+    """
     companies = load_companies()
     if slug not in companies:
         raise KeyError(f"Company '{slug}' not found. Available: {list(companies.keys())}")
@@ -312,6 +614,8 @@ async def run_company(
         skip_analyze=skip_analyze,
         dry_run=dry_run,
         initial_research=initial_research,
+        requested_steps=requested_steps,
+        reprocess=reprocess,
     )
 
 
