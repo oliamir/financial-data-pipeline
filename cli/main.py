@@ -167,12 +167,13 @@ def main():
     validate_parser.add_argument("--all", action="store_true", dest="validate_all")
 
     # dashboard
-    dash_parser = subparsers.add_parser("dashboard", help="Live status dashboard")
+    dash_parser = subparsers.add_parser("dashboard", help="Rich live status dashboard")
+    dash_parser.add_argument("company", nargs="?", default=None,
+                             help="Company slug (optional positional filter)")
     dash_parser.add_argument("--tier", choices=["high", "low"], help="Filter by tier")
-    dash_parser.add_argument("--company", help="Single company")
-    dash_parser.add_argument("--watch", nargs="?", const=5, type=int, metavar="SEC",
-                             help="Auto-refresh (default: 5s)")
-    dash_parser.add_argument("--no-files", action="store_true", help="Hide file list")
+    dash_parser.add_argument("--watch", "-w", nargs="?", const=5, type=int,
+                             metavar="SEC",
+                             help="Auto-refresh interval in seconds (default: 5)")
 
     args = parser.parse_args()
 
@@ -185,9 +186,12 @@ def main():
     elif args.command == "validate":
         cmd_validate(args)
     elif args.command == "dashboard":
-        from cli.dashboard import main as dashboard_main
-        sys.argv = ["dashboard"] + sys.argv[2:]  # pass remaining args
-        dashboard_main()
+        from cli.dashboard import run_dashboard
+        run_dashboard(
+            slug=args.company,
+            priority=args.tier,
+            watch=args.watch,
+        )
     else:
         parser.print_help()
 
