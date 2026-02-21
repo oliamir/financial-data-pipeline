@@ -56,3 +56,44 @@ class CompanyPaths:
         d = self.root / f"{year}-{period}"
         d.mkdir(parents=True, exist_ok=True)
         return d
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience functions (used by dashboard, etc.)
+# ---------------------------------------------------------------------------
+_DATA_ROOT = Path(__file__).resolve().parent.parent.parent / "data" / "companies"
+
+
+def company_dir(slug: str) -> str:
+    """Return the company data directory path as a string."""
+    return str(_DATA_ROOT / slug)
+
+
+def reports_dir(slug: str) -> str:
+    """Return the reports directory path as a string."""
+    return str(_DATA_ROOT / slug / "reports")
+
+
+def meta_json(slug: str) -> str:
+    """Return the meta.json path as a string."""
+    return str(_DATA_ROOT / slug / "meta.json")
+
+
+def financials_json(slug: str) -> str:
+    """Return the financials.json path as a string."""
+    return str(_DATA_ROOT / slug / "financials.json")
+
+
+def memo_json(slug: str) -> str:
+    """Return the memo.json path as a string."""
+    return str(_DATA_ROOT / slug / "memo.json")
+
+
+def kpi_json(slug: str) -> str:
+    """Return the kpi.json path as a string."""
+    return str(_DATA_ROOT / slug / "kpi.json")
+
+
+def financials_csv(slug: str) -> str:
+    """Return the financials CSV path (legacy compat) as a string."""
+    return str(_DATA_ROOT / slug / "Financial_Model.csv")

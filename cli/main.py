@@ -173,5 +173,16 @@ def tase_fetch(
     )
 
 
+@app.command(name="dashboard")
+def dashboard(
+    company: Optional[str] = typer.Argument(None, help="Filter to one company slug"),
+    watch: Optional[int] = typer.Option(None, "--watch", "-w", help="Auto-refresh interval in seconds"),
+    tier: Optional[str] = typer.Option(None, "--tier", help="Filter by priority: high or low"),
+) -> None:
+    """Rich terminal dashboard showing pipeline progress."""
+    from cli.dashboard import run_dashboard
+    run_dashboard(slug=company, priority=tier, watch=watch)
+
+
 if __name__ == "__main__":
     app()
