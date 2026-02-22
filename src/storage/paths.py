@@ -51,11 +51,6 @@ class CompanyPaths:
         filename = f"{year}_{period}_{report_id}.{ext}"
         return self.reports_dir / filename
 
-    def period_dir(self, year: int, period: str) -> Path:
-        """Directory for period-specific downloads (for Drive upload)."""
-        d = self.root / f"{year}-{period}"
-        d.mkdir(parents=True, exist_ok=True)
-        return d
 
 
 # ---------------------------------------------------------------------------

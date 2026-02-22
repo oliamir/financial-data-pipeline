@@ -12,7 +12,6 @@ class StepName(str, Enum):
     KPI = "kpi"
     MODEL = "model"
     MEMO = "memo"
-    UPLOAD = "upload"
 
 class StepResult(BaseModel):
     """Result of a single pipeline step execution."""

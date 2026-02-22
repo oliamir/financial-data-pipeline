@@ -10,42 +10,64 @@ Financial Data Pipeline — automated scraping and AI analysis of company report
 - **Scraping**: Playwright (headless Chromium), BeautifulSoup, Requests
 - **AI Providers**: Google Gemini (primary), Ollama (local), Anthropic, OpenAI (disabled)
 - **Data**: pandas, pdfplumber, openpyxl
-- **Storage**: Local filesystem + optional Google Drive upload
+- **Storage**: Local filesystem on Google Drive (auto-synced)
 - **Config**: YAML (`config/companies.yaml`, `config/providers.yaml`), `.env` for API keys
 
 ## Project Structure
 
 ```
 cli/                    # CLI entry point and dashboard
-  main.py               # Unified CLI: run, status, list, validate, dashboard
+  main.py               # Unified CLI: run, status, list, validate, dashboard, web
   dashboard.py           # Terminal dashboard with progress bars
+  commands/              # CLI command implementations
 config/                 # YAML configuration
   companies.yaml         # Company registry (18 companies, priority tiers)
   providers.yaml         # AI provider config (Gemini, Ollama, Anthropic, OpenAI)
 src/                    # Core library
   ai/                    # AI task router + provider abstraction
-    router.py            # Ollama-first extraction, Gemini fallback/validation
-    providers.py         # GeminiProvider, OllamaProvider (BaseProvider interface)
-  models/                # Data models (FinancialMetric, InvestmentMemo, ReportMetadata)
-  pipeline/              # Pipeline orchestrator (scrape -> download -> analyze -> store)
-    orchestrator.py
-  registry/              # Company registry loader + priority tiers
-    company.py
-    priority.py
-  scrapers/              # Web scrapers
-    tase.py              # TASE Maya Playwright scraper
-    ir_generic.py        # Generic IR website scraper (heuristic + LLM)
-    ir_profiles.py       # IR platform profiles (Q4, Notified, WordPress)
-    coordinator.py       # Scraping coordinator with retries, health checks
+    registry.py          # ProviderRegistry — multi-provider manager
+    task_router.py       # Ollama-first extraction, Gemini fallback/validation
+    ollama_provider.py   # OllamaProvider (local LLM)
+    gemini_provider.py   # GeminiProvider (Google API)
+  config/                # Config loaders
+  excel/                 # Excel financial model builder
+  memo/                  # Investment memo renderer
+  models/                # Pydantic data models (FinancialPeriod, InvestmentMemo, PipelineJob)
+  pipeline/              # Pipeline orchestrator + step implementations
+    runner.py            # Main orchestrator (scrape → parse → model → memo)
+    steps/               # Individual pipeline steps (classify, extract, kpi, memo)
+  progress/              # Real-time progress tracking via EventBus
+  scheduler/             # Cron-style pipeline scheduler
+  sources/               # Source coordinator (TASE + IR website discovery)
   storage/               # File management + path conventions
-    file_manager.py
-    paths.py
-  utils/
-code/                   # Legacy codebase (v1 — has its own bin/, src/, tests/)
-deploy/oracle-cloud/    # OCI deployment scripts
-data/                   # Runtime data
-downloads/              # Downloaded reports (gitignored)
+    file_manager.py      # CRUD for company artifacts
+    paths.py             # Centralized path conventions
+  tase_maya/             # TASE Maya headless scraper + downloader
+  universe/              # TASE company universe management
+  web/                   # Flask web dashboard (two-tab: Dashboard + Priority List)
+  utils/                 # Logging, helpers
+data/                   # Runtime data (gitignored, lives on Google Drive)
+  companies/             # Per-company data: reports, financials, memos, models
+  universe.json          # Full TASE company universe
+  priority_list.json     # Priority company list
+deploy/                 # Deployment scripts
 tests/                  # Test files (integration/diagnostic style)
+```
+
+## Data Layout (per company)
+
+All company data lives in `data/companies/<slug>/`:
+
+```
+data/companies/sofwave/
+├── meta.json              # Scraping inventory & processed file tracker
+├── financials.json        # Extracted financial periods
+├── Financial_Model.xlsx   # Excel model
+├── Investment_Memo.md     # Rendered markdown memo
+├── memo.json              # Structured memo data
+├── kpi.json               # Calculated KPI metrics
+├── research.json          # Market research data
+└── reports/               # Downloaded PDF reports
 ```
 
 ## Key Commands
@@ -55,10 +77,13 @@ tests/                  # Test files (integration/diagnostic style)
 source venv/bin/activate
 
 # Run pipeline for a single company
-python -m cli.main run --company sofwave
+python -m cli.main run sofwave
 
 # Run all high-priority companies
-python -m cli.main run --all --priority high
+python -m cli.main run-all --priority high
+
+# Run specific pipeline steps
+python -m cli.main run sofwave --step download,parse,model
 
 # Check status
 python -m cli.main status
@@ -66,12 +91,14 @@ python -m cli.main status
 # List registered companies
 python -m cli.main list
 
+# Web dashboard
+python -m cli.main web
+
 # Terminal dashboard
 python -m cli.main dashboard
 
-# Legacy entry points (in code/ directory)
-python code/bin/run_pipeline.py --company Sofwave --provider google --model gemini-2.0-flash
-python code/bin/robust_monitor.py
+# TASE Maya standalone fetch
+python -m cli.main tase-fetch --companies sofwave,enlight --years 3
 ```
 
 ## Environment Variables
@@ -86,11 +113,20 @@ Optional:
 
 ## Architecture Notes
 
-- **Two codebases coexist**: `src/` is the v2 modular rewrite; `code/` is the v1 legacy code. New work should target `src/` and `cli/`.
-- **AI routing**: The task router (`src/ai/router.py`) tries Ollama first for extraction, falls back to Gemini. Gemini is used for validation.
+- **Single codebase**: `src/` is the active codebase; `cli/` is the entry point.
+- **AI routing**: The task router (`src/ai/task_router.py`) tries Ollama first for extraction, falls back to Gemini. Gemini is used for validation and deep research.
 - **Company priority tiers**: High-priority companies get more thorough analysis. Defined in `config/companies.yaml`.
 - **Scraping order**: For dual-listed companies, IR websites are scraped first; TASE Maya is the fallback.
-- **Output artifacts per company**: `Investment_Memo.md`, `Financial_Model.csv`, organized report files.
+- **Output artifacts per company**: `Investment_Memo.md`, `Financial_Model.xlsx`, organized report files.
+- **Storage on Google Drive**: The entire project folder is synced via Google Drive — no separate upload step needed.
+
+## Pipeline Steps
+
+1. `initial_research` — Web-based strategic research (Gemini deep thinking)
+2. `download` — Discover & fetch reports from TASE Maya / IR websites
+3. `parse` — Classify documents, extract financials, calculate KPIs (per PDF)
+4. `model` — Build Excel financial model from extracted data
+5. `memo` — Generate/update investment memo
 
 ## Common Patterns
 
@@ -102,16 +138,12 @@ Optional:
 
 ## Testing
 
-Tests are integration/diagnostic-oriented (endpoint probing, Playwright flows, scraper verification). Not strict unit tests. Located in `tests/` and `code/tests/`.
-
 ```bash
-# Run from project root
 python -m pytest tests/
 ```
 
 ## Important Warnings
 
-- **Never commit `.env`, `credentials.json`, or `token.pickle`** — these contain API keys and OAuth tokens
-- `downloads/`, `output/`, and `logs/` are gitignored
-- The `code/` directory is legacy; avoid adding new features there
+- **Never commit `.env`** — contains API keys
+- `data/` and `logs/` are gitignored
 - TASE scraper has intentional ~120s overall timeout (gets 6-8 pages per run)

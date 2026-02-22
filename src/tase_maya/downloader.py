@@ -211,7 +211,7 @@ class TaseMayaDownloader:
     def __init__(
         self,
         *,
-        output_root: str | Path = "downloads/tase_maya",
+        output_root: str | Path = "data/companies",
         state_path: str | Path | None = None,
         headless: bool = True,
         max_pages: int = 120,

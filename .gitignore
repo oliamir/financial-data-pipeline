@@ -2,17 +2,14 @@ __pycache__/
 *.pyc
 venv/
 .env
-downloads/
-logs/
-archive/
 *.log
 .DS_Store
-token.pickle
-credentials.json
-output/
 
-# v3 additions
+# Runtime data (on Google Drive, no need to track in git)
 data/
+logs/
+
+# Build artifacts
 *.egg-info/
 dist/
 build/

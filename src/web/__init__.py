@@ -408,7 +408,6 @@ DASHBOARD_HTML = """
                                 '<option value="parse">parse</option>' +
                                 '<option value="model">model</option>' +
                                 '<option value="memo">memo</option>' +
-                                '<option value="upload">upload</option>' +
                             '</select>' +
                             '<div class="progress" style="width:55px" id="progress-'+c.slug+'"><div class="progress-bar" style="width:0%"></div></div>' +
                         '</div></td>';

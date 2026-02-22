@@ -1,6 +1,6 @@
 """V3 Pipeline orchestrator — runs the full pipeline with step tracking.
 
-Coordinates: scrape → classify → extract → KPI → memo → drive upload
+Coordinates: scrape → classify → extract → KPI → memo
 with PipelineJob tracking, step filtering, and ProgressTracker integration.
 
 Supports:
@@ -37,7 +37,7 @@ logger = get_logger(__name__)
 # Valid step names for the --step flag
 VALID_STEPS = {
     "download", "parse", "model", "memo",
-    "initial_research", "upload",
+    "initial_research",
 }
 
 
@@ -50,7 +50,6 @@ class PipelineOrchestrator:
         3. parse — classify, extract financials, calculate KPIs (per file)
         4. model — build Excel financial model
         5. memo — generate/update investment memo
-        6. upload — Google Drive upload (optional)
     """
 
     def __init__(
@@ -93,7 +92,6 @@ class PipelineOrchestrator:
         years_back: int = 5,
         skip_scrape: bool = False,
         skip_analyze: bool = False,
-        skip_upload: bool = True,
         dry_run: bool = False,
         initial_research: bool = False,
         requested_steps: Optional[List[str]] = None,
@@ -105,11 +103,10 @@ class PipelineOrchestrator:
             years_back: How many years of history to fetch.
             skip_scrape: Skip document discovery and download.
             skip_analyze: Skip AI analysis (classify, extract, memo).
-            skip_upload: Skip Google Drive upload.
             dry_run: Log actions without executing.
             initial_research: Force initial research even if already done.
             requested_steps: List of step names to run (None = all).
-                Valid steps: download, parse, model, memo, initial_research, upload
+                Valid steps: download, parse, model, memo, initial_research
             reprocess: Re-analyze already-processed files.
 
         Returns:
@@ -187,10 +184,6 @@ class PipelineOrchestrator:
                 # Memo can run independently with web research only
                 if step_filter and "memo" in step_filter and "parse" not in (step_filter or set()):
                     await self._run_memo_standalone(dry_run)
-
-            # Stage 6: Upload
-            if self._should_run_step("upload", step_filter) and not skip_upload:
-                await self._run_upload(dry_run)
 
             self.job.status = "complete"
 
@@ -453,52 +446,6 @@ class PipelineOrchestrator:
             logger.error(f"  Standalone memo failed: {e}")
             if tracker:
                 tracker.fail_step("memo", str(e))
-
-    async def _run_upload(self, dry_run: bool) -> None:
-        """Upload artifacts to Google Drive."""
-        logger.info("[5/6] Uploading to Google Drive...")
-
-        tracker = self._get_tracker()
-        if tracker:
-            tracker.start_step("upload", "Uploading to Google Drive...")
-
-        if dry_run:
-            logger.info("  [DRY RUN] Would upload to Google Drive")
-            if tracker:
-                tracker.complete_step("upload", "Dry run")
-            return
-
-        try:
-            from ..storage.drive import DriveUploader
-            uploader = DriveUploader()
-            uploader.upload_company_artifacts(self.company.slug)
-            self.job.steps.append(StepResult(
-                step=StepName.UPLOAD,
-                status="success",
-            ))
-            logger.info("  → Upload complete")
-            if tracker:
-                tracker.complete_step("upload", "Upload complete")
-
-        except ImportError:
-            logger.warning("  Drive upload not available (missing credentials)")
-            self.job.steps.append(StepResult(
-                step=StepName.UPLOAD,
-                status="skipped",
-                detail="Drive uploader not available",
-            ))
-            if tracker:
-                tracker.skip_step("upload", "Not available")
-
-        except Exception as e:
-            logger.error(f"  Drive upload failed: {e}")
-            self.job.steps.append(StepResult(
-                step=StepName.UPLOAD,
-                status="failed",
-                detail=str(e),
-            ))
-            if tracker:
-                tracker.fail_step("upload", str(e))
 
     async def _run_initial_research(self, dry_run: bool) -> None:
         """Run strategic initial research with Gemini deep thinking."""

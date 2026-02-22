@@ -49,7 +49,7 @@ def show_status(
 def run(
     slug: str = typer.Argument(..., help="Company slug to process"),
     years: int = typer.Option(5, "--years", "-y", help="Years of history to fetch"),
-    step: Optional[str] = typer.Option(None, "--step", "-s", help="Comma-separated steps: download,parse,model,memo,initial_research,upload"),
+    step: Optional[str] = typer.Option(None, "--step", "-s", help="Comma-separated steps: download,parse,model,memo,initial_research"),
     test_mode: bool = typer.Option(False, "--test-mode", help="E2E test: 1-year download + model + full web-research memo"),
     reprocess: bool = typer.Option(False, "--reprocess", help="Re-analyze already-processed files"),
     skip_scrape: bool = typer.Option(False, "--skip-scrape", help="Skip scraping/download"),
@@ -549,7 +549,7 @@ def tase_fetch(
         help="Default on: start from each company's last successful run when available.",
     ),
     output_root: str = typer.Option(
-        "downloads/tase_maya", "--output-root",
+        "data/companies", "--output-root",
         help="Root output directory for downloaded files",
     ),
     max_pages: int = typer.Option(
