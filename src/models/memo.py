@@ -63,19 +63,26 @@ class MemoRevision(BaseModel):
 
 
 class InitialResearch(BaseModel):
-    """Results from the 5 strategic deep-thinking prompts.
+    """Results from strategic deep-thinking prompts.
 
-    Prompt 0: Competitor discovery (top 7)
-    Prompt 1: TAM / SAM / SOM market sizing
-    Prompt 2: Competitive analysis with 2×2 matrix (uses Prompt 0 output)
-    Prompt 3: Market intelligence quarterly brief
-    Prompt 4: SWOT + action matrix (uses Prompt 0 output)
+    Core research prompts (populated from memo framework):
+      - Competitor discovery
+      - TAM / SAM / SOM market sizing
+      - Competitive analysis
+      - Market intelligence
+      - SWOT analysis
+      - Seven Powers analysis (Hamilton Helmer)
+      - Ownership structure & shareholder dynamics
+      - Israel-specific risk factors
     """
     competitors: str = ""
     tam_sam_som: str = ""
     competitive_analysis: str = ""
     market_intelligence: str = ""
     swot_analysis: str = ""
+    seven_powers: str = ""
+    ownership_structure: str = ""
+    israel_risk: str = ""
     generated_at: Optional[str] = None
     model_used: str = ""
 
@@ -110,6 +117,14 @@ class InvestmentMemo(BaseModel):
     open_questions: str = ""
     appendix: str = ""
 
+    # New framework sections (from investment_memo_framework_v3)
+    market_size: str = ""
+    seven_powers: str = ""
+    ownership_structure: str = ""
+    israel_risk_factors: str = ""
+    investment_conclusion: str = ""
+    swot_analysis: str = ""
+
     # LLM may return these alternative field names
     revenue_analysis: str = ""
     profitability_analysis: str = ""
@@ -142,7 +157,8 @@ class InvestmentMemo(BaseModel):
                 "valuation", "scenario_analysis", "risks_mitigants", "catalysts_timeline",
                 "open_questions", "appendix", "summary", "revenue_analysis",
                 "profitability_analysis", "balance_sheet_review", "cash_flow_analysis",
-                "esg_notes",
+                "esg_notes", "market_size", "seven_powers", "ownership_structure",
+                "israel_risk_factors", "investment_conclusion", "swot_analysis",
             ]
             for field in text_fields:
                 val = data.get(field)

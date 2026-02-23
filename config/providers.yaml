@@ -36,6 +36,11 @@ providers:
     rate_limit_delay: 15
     enabled: false                    # Only used by initial_research step directly
 
+  claude_code:
+    type: claude_code
+    model: claude-sonnet-4-6
+    enabled: true                     # Uses Max subscription via claude CLI auth
+
 routing:
   classify:
     primary: ollama
@@ -50,5 +55,5 @@ routing:
     primary: ollama
     fallback: []
   initial_research:
-    primary: gemini_deep
-    fallback: [gemini]
+    primary: claude_code
+    fallback: [gemini_deep, gemini]

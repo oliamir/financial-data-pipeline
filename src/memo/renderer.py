@@ -1,14 +1,20 @@
-"""MemoRenderer — converts structured InvestmentMemo into professional markdown.
+"""MemoRenderer — renders InvestmentMemo to markdown using the framework structure.
 
-Renders all sections, structured tables (scenarios, risks, catalysts),
-initial research, and revision history into a single cohesive document.
+Section order and titles are driven by ``config/memo_framework.md``.  Editing
+that file changes the output structure without touching Python code.
+
+Structured tables (scenarios, risks, catalysts, revisions) have dedicated
+rendering helpers because they come from typed sub-models, not free-text fields.
 """
 
 from datetime import datetime
 from typing import Optional
 
 from ..models.memo import InvestmentMemo
+from .framework_parser import parse_framework
+from ..utils.logging import get_logger
 
+logger = get_logger(__name__)
 
 # Badge mappings for visual indicators
 _RECOMMENDATION_BADGE = {
@@ -35,9 +41,16 @@ _THESIS_BADGE = {
     "revised": "🔄 Revised",
 }
 
+# Fields that have special structured rendering (not simple text)
+_STRUCTURED_FIELDS = {"scenario_analysis", "risks_mitigants", "catalysts_timeline", "action_items"}
+
 
 class MemoRenderer:
-    """Renders an InvestmentMemo to professional markdown."""
+    """Renders an InvestmentMemo to professional markdown.
+
+    Section order and titles come from the framework file.  Sections with
+    no content are silently omitted.
+    """
 
     @staticmethod
     def render(memo: InvestmentMemo) -> str:
@@ -49,63 +62,92 @@ class MemoRenderer:
         Returns:
             Formatted markdown string.
         """
-        sections = []
-        sections.append(MemoRenderer._render_header(memo))
+        parts = [MemoRenderer._render_header(memo)]
 
-        # Core narrative sections
-        _section_map = [
-            ("Executive Summary", memo.executive_summary),
-            ("Company Overview", memo.company_overview),
-            ("Industry Analysis", memo.industry_analysis),
-            ("Competitive Positioning", memo.competitive_positioning),
-            ("Management & Governance", memo.management_governance),
-            ("Financial Analysis", memo.financial_analysis or MemoRenderer._build_financial_section(memo)),
-            ("Valuation", memo.valuation),
-            ("ESG & Governance", memo.esg_notes),
-        ]
+        # Load section definitions from the framework file
+        try:
+            framework_sections = parse_framework()
+        except FileNotFoundError:
+            logger.warning("Framework file not found; falling back to minimal render")
+            framework_sections = []
 
-        for title, content in _section_map:
-            if content and content.strip():
-                sections.append(f"## {title}\n\n{content.strip()}")
+        for section in framework_sections:
+            rendered = MemoRenderer._render_section(memo, section.field_name, section.number, section.title)
+            if rendered:
+                parts.append(rendered)
 
-        # Structured tables
-        if memo.scenarios:
-            sections.append(MemoRenderer._render_scenarios(memo))
-        elif memo.scenario_analysis:
-            sections.append(f"## Scenario Analysis\n\n{memo.scenario_analysis.strip()}")
+        # Strategic research appendix (from initial_research sub-model)
+        research = MemoRenderer._render_initial_research(memo)
+        if research:
+            parts.append(research)
 
-        if memo.risks:
-            sections.append(MemoRenderer._render_risks(memo))
-        elif memo.risks_mitigants:
-            sections.append(f"## Risks & Mitigants\n\n{memo.risks_mitigants.strip()}")
-
-        if memo.catalysts:
-            sections.append(MemoRenderer._render_catalysts(memo))
-        elif memo.catalysts_timeline:
-            sections.append(f"## Catalysts & Timeline\n\n{memo.catalysts_timeline.strip()}")
-
-        # Initial research (Strategic Research section)
-        research_section = MemoRenderer._render_initial_research(memo)
-        if research_section:
-            sections.append(research_section)
-
-        # Open questions & action items
-        if memo.open_questions and memo.open_questions.strip():
-            sections.append(f"## Open Questions\n\n{memo.open_questions.strip()}")
-
-        if memo.action_items:
-            items = "\n".join(f"- {item}" for item in memo.action_items)
-            sections.append(f"## Action Items\n\n{items}")
-
-        # Appendix
-        if memo.appendix and memo.appendix.strip():
-            sections.append(f"## Appendix\n\n{memo.appendix.strip()}")
-
-        # Revision history
+        # Revision history (always last)
         if memo.revisions:
-            sections.append(MemoRenderer._render_revisions(memo))
+            parts.append(MemoRenderer._render_revisions(memo))
 
-        return "\n\n---\n\n".join(sections) + "\n"
+        return "\n\n---\n\n".join(parts) + "\n"
+
+    # ------------------------------------------------------------------
+    # Section dispatch
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _render_section(memo: InvestmentMemo, field_name: str, number: int, title: str) -> Optional[str]:
+        """Render a single section by field name.
+
+        Delegates to structured renderers for scenarios/risks/catalysts,
+        and uses direct text content for everything else.
+        """
+        heading = f"## {number}. {title}"
+
+        # --- Structured tables ---
+        if field_name == "scenario_analysis":
+            if memo.scenarios:
+                return MemoRenderer._render_scenarios(memo, heading)
+            text = memo.scenario_analysis
+            if text and text.strip():
+                return f"{heading}\n\n{text.strip()}"
+            return None
+
+        if field_name == "risks_mitigants":
+            if memo.risks:
+                return MemoRenderer._render_risks(memo, heading)
+            text = memo.risks_mitigants
+            if text and text.strip():
+                return f"{heading}\n\n{text.strip()}"
+            return None
+
+        if field_name == "catalysts_timeline":
+            if memo.catalysts:
+                return MemoRenderer._render_catalysts(memo, heading)
+            text = memo.catalysts_timeline
+            if text and text.strip():
+                return f"{heading}\n\n{text.strip()}"
+            return None
+
+        if field_name == "action_items":
+            if memo.action_items:
+                items = "\n".join(f"- {item}" for item in memo.action_items)
+                return f"{heading}\n\n{items}"
+            return None
+
+        # --- Financial analysis: try sub-sections as fallback ---
+        if field_name == "financial_analysis":
+            content = memo.financial_analysis or MemoRenderer._build_financial_section(memo)
+            if content and content.strip():
+                return f"{heading}\n\n{content.strip()}"
+            return None
+
+        # --- Standard text fields ---
+        content = getattr(memo, field_name, None)
+        if content and isinstance(content, str) and content.strip():
+            return f"{heading}\n\n{content.strip()}"
+
+        return None
+
+    # ------------------------------------------------------------------
+    # Header
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _render_header(memo: InvestmentMemo) -> str:
@@ -124,8 +166,8 @@ class MemoRenderer:
         lines = [
             f"# Investment Memo — {memo.company_slug.replace('_', ' ').title()}",
             "",
-            f"| Field | Value |",
-            f"|-------|-------|",
+            "| Field | Value |",
+            "|-------|-------|",
             f"| **Recommendation** | {rec} |",
             f"| **Conviction** | {conv} |",
             f"| **Thesis Status** | {thesis} |",
@@ -133,6 +175,10 @@ class MemoRenderer:
             f"| **Last Updated** | {updated} |",
         ]
         return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Financial sub-section fallback
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _build_financial_section(memo: InvestmentMemo) -> str:
@@ -148,21 +194,24 @@ class MemoRenderer:
             parts.append(f"### Cash Flow Analysis\n\n{memo.cash_flow_analysis.strip()}")
         return "\n\n".join(parts)
 
+    # ------------------------------------------------------------------
+    # Structured tables
+    # ------------------------------------------------------------------
+
     @staticmethod
-    def _render_scenarios(memo: InvestmentMemo) -> str:
+    def _render_scenarios(memo: InvestmentMemo, heading: str) -> str:
         """Render scenarios as a table."""
         lines = [
-            "## Scenario Analysis",
+            heading,
             "",
             "| Scenario | Probability | Target Price | Description |",
             "|----------|------------|-------------|-------------|",
         ]
         for s in memo.scenarios:
-            price = f"{s.currency} {s.target_price:,.2f}" if s.target_price else "—"
-            desc = s.description[:120] + "…" if len(s.description) > 120 else s.description
+            price = f"{s.currency} {s.target_price:,.2f}" if s.target_price else "\u2014"
+            desc = s.description[:120] + "\u2026" if len(s.description) > 120 else s.description
             lines.append(f"| **{s.name.title()}** | {s.probability_pct:.0f}% | {price} | {desc} |")
 
-        # Key assumptions below table
         for s in memo.scenarios:
             if s.key_assumptions:
                 assumptions = ", ".join(s.key_assumptions)
@@ -171,46 +220,59 @@ class MemoRenderer:
         return "\n".join(lines)
 
     @staticmethod
-    def _render_risks(memo: InvestmentMemo) -> str:
+    def _render_risks(memo: InvestmentMemo, heading: str) -> str:
         """Render risks as a table."""
-        severity_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}
+        severity_icon = {"high": "\U0001f534", "medium": "\U0001f7e1", "low": "\U0001f7e2"}
         lines = [
-            "## Risks & Mitigants",
+            heading,
             "",
             "| # | Category | Severity | Description | Mitigation |",
             "|---|----------|----------|-------------|------------|",
         ]
         for i, r in enumerate(memo.risks, 1):
-            icon = severity_icon.get(r.severity, "⚪")
-            mitigation = r.mitigation or "—"
-            lines.append(f"| {i} | {r.category.title()} | {icon} {r.severity.title()} | {r.description} | {mitigation} |")
-
+            icon = severity_icon.get(r.severity, "\u26aa")
+            mitigation = r.mitigation or "\u2014"
+            lines.append(
+                f"| {i} | {r.category.title()} | {icon} {r.severity.title()} "
+                f"| {r.description} | {mitigation} |"
+            )
         return "\n".join(lines)
 
     @staticmethod
-    def _render_catalysts(memo: InvestmentMemo) -> str:
+    def _render_catalysts(memo: InvestmentMemo, heading: str) -> str:
         """Render catalysts as a table."""
-        impact_icon = {"positive": "📈", "negative": "📉", "neutral": "➡️"}
+        impact_icon = {"positive": "\U0001f4c8", "negative": "\U0001f4c9", "neutral": "\u27a1\ufe0f"}
         lines = [
-            "## Catalysts & Timeline",
+            heading,
             "",
             "| # | Catalyst | Timeframe | Impact | Probability |",
             "|---|----------|-----------|--------|-------------|",
         ]
         for i, c in enumerate(memo.catalysts, 1):
-            icon = impact_icon.get(c.impact, "➡️")
-            tf = c.timeframe or c.timeline or "—"
-            prob = c.probability or "—"
+            icon = impact_icon.get(c.impact, "\u27a1\ufe0f")
+            tf = c.timeframe or c.timeline or "\u2014"
+            prob = c.probability or "\u2014"
             lines.append(f"| {i} | {c.description} | {tf} | {icon} {c.impact.title()} | {prob} |")
-
         return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Initial research (strategic research appendix)
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _render_initial_research(memo: InvestmentMemo) -> Optional[str]:
-        """Render initial strategic research sections."""
+        """Render initial strategic research sections as an appendix."""
         ir = memo.initial_research
-        if not ir or not any([ir.competitors, ir.tam_sam_som, ir.competitive_analysis,
-                             ir.market_intelligence, ir.swot_analysis]):
+        if not ir:
+            return None
+
+        # Check if ANY research field has content
+        research_fields = [
+            ir.competitors, ir.tam_sam_som, ir.competitive_analysis,
+            ir.market_intelligence, ir.swot_analysis, ir.seven_powers,
+            ir.ownership_structure, ir.israel_risk,
+        ]
+        if not any(f and f.strip() for f in research_fields):
             return None
 
         lines = ["## Strategic Research"]
@@ -228,6 +290,9 @@ class MemoRenderer:
             ("Competitive Analysis", ir.competitive_analysis),
             ("Market Intelligence", ir.market_intelligence),
             ("SWOT & Strategic Positioning", ir.swot_analysis),
+            ("Seven Powers Analysis", ir.seven_powers),
+            ("Ownership Structure", ir.ownership_structure),
+            ("Israel-Specific Risks", ir.israel_risk),
         ]
 
         for title, content in sub_sections:
@@ -235,6 +300,10 @@ class MemoRenderer:
                 lines.append(f"\n### {title}\n\n{content.strip()}")
 
         return "\n".join(lines)
+
+    # ------------------------------------------------------------------
+    # Revision history
+    # ------------------------------------------------------------------
 
     @staticmethod
     def _render_revisions(memo: InvestmentMemo) -> str:
@@ -246,13 +315,12 @@ class MemoRenderer:
             "|---------|------|--------|--------------|---------|",
         ]
         for rev in sorted(memo.revisions, key=lambda r: r.version, reverse=True):
-            impact_icon = {"positive": "📈", "negative": "📉", "neutral": "➡️"}.get(
-                rev.thesis_impact, "➡️"
+            impact_icon = {"positive": "\U0001f4c8", "negative": "\U0001f4c9", "neutral": "\u27a1\ufe0f"}.get(
+                rev.thesis_impact, "\u27a1\ufe0f"
             )
-            summary = rev.changes_summary[:80] + "…" if len(rev.changes_summary) > 80 else rev.changes_summary
+            summary = rev.changes_summary[:80] + "\u2026" if len(rev.changes_summary) > 80 else rev.changes_summary
             lines.append(
-                f"| v{rev.version} | {rev.date} | {rev.source_file or '—'} "
+                f"| v{rev.version} | {rev.date} | {rev.source_file or '\u2014'} "
                 f"| {impact_icon} {rev.thesis_impact.title()} | {summary} |"
             )
-
         return "\n".join(lines)

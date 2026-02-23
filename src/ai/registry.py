@@ -90,6 +90,12 @@ class ProviderRegistry:
                 model=cfg.get("model", "gpt-4o"),
             )
 
+        elif provider_type == "claude_code":
+            from .claude_sdk_provider import ClaudeCodeProvider
+            return ClaudeCodeProvider(
+                model=cfg.get("model", "claude-sonnet-4-6"),
+            )
+
         else:
             logger.warning(f"Unknown provider type: {provider_type}")
             return None

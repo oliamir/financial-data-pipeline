@@ -162,7 +162,7 @@ class TestMemoRenderer:
             ],
         )
         md = MemoRenderer.render(memo)
-        assert "## Scenario Analysis" in md
+        assert "Scenario Analysis" in md
         assert "| **Bull**" in md
         assert "| **Base**" in md
         assert "| **Bear**" in md
@@ -178,7 +178,7 @@ class TestMemoRenderer:
             ],
         )
         md = MemoRenderer.render(memo)
-        assert "## Risks & Mitigants" in md
+        assert "Risks & Mitigants" in md
         assert "🔴" in md  # high severity
         assert "🟢" in md  # low severity
         assert "Macro downturn" in md
@@ -191,7 +191,7 @@ class TestMemoRenderer:
             ],
         )
         md = MemoRenderer.render(memo)
-        assert "## Catalysts & Timeline" in md
+        assert "Catalysts & Timeline" in md
         assert "FDA approval" in md
         assert "Q2 2026" in md
 
@@ -246,7 +246,7 @@ class TestMemoRenderer:
             action_items=["Research competitor pricing", "Follow up on Q4 guidance"],
         )
         md = MemoRenderer.render(memo)
-        assert "## Action Items" in md
+        assert "Action Items" in md
         assert "- Research competitor pricing" in md
 
     def test_narrative_sections(self):
@@ -257,7 +257,7 @@ class TestMemoRenderer:
             valuation="Trading at 15x EV/EBITDA, 20% discount to peers.",
         )
         md = MemoRenderer.render(memo)
-        assert "## Executive Summary" in md
+        assert "Executive Summary" in md
         assert "great company" in md
-        assert "## Company Overview" in md
-        assert "## Valuation" in md
+        assert "Company Overview" in md
+        assert "Valuation" in md

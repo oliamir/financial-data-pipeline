@@ -10,67 +10,196 @@ from datetime import datetime
 from typing import Optional
 
 from ...ai.task_router import TaskRouter, AITaskType
+from ...memo.framework_parser import parse_framework
 from ...models.memo import InvestmentMemo, MemoRevision
 from ...utils.json_fix import extract_json_from_response
 from ...utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-MEMO_PROMPT = """You are a senior financial analyst. Generate a comprehensive investment memo
-for this company based on the financial report provided. Include:
+def _build_memo_prompt(company_slug: str) -> str:
+    """Build the memo generation prompt dynamically from the framework file.
 
-1. Company Overview (business description, market position)
-2. Financial Summary (key highlights from latest period)
-3. Revenue Analysis (trends, segmentation, growth drivers)
-4. Profitability Analysis (margins, operating leverage)
-5. Balance Sheet Review (capital structure, liquidity)
-6. Cash Flow Analysis (quality of earnings, free cash flow)
-7. Key Risks (top 3-5 risks with severity ratings)
-8. Catalysts (near-term catalysts with timeline)
-9. Valuation (multiples, peer comparison if possible)
-10. Bull/Bear/Base scenarios with target prices
-11. Investment Thesis (buy/hold/sell recommendation)
-12. ESG considerations
-13. Action items for follow-up research
+    Reads ``config/memo_framework.md`` via :func:`parse_framework`, enumerates
+    every section the LLM must populate, and embeds the framework's analytical
+    philosophy into the system prompt.
 
-Return the memo as a JSON object matching this structure:
-{
-  "company_slug": "<slug>",
-  "recommendation": "<buy|hold|sell|speculative_buy>",
-  "thesis_status": "<new|confirmed|revised|weakened>",
-  "summary": "<1 paragraph executive summary>",
-  "revenue_analysis": "<detailed analysis>",
-  "profitability_analysis": "<detailed analysis>",
-  "balance_sheet_review": "<detailed analysis>",
-  "cash_flow_analysis": "<detailed analysis>",
-  "risks": [{"description": "...", "severity": "<high|medium|low>", "category": "..."}],
-  "catalysts": [{"description": "...", "timeline": "...", "probability": "<high|medium|low>"}],
-  "scenarios": [
-    {"name": "Bull", "description": "...", "target_price": null, "probability": 0.25},
-    {"name": "Base", "description": "...", "target_price": null, "probability": 0.50},
-    {"name": "Bear", "description": "...", "target_price": null, "probability": 0.25}
-  ],
-  "esg_notes": "<ESG considerations>",
-  "action_items": ["follow up on...", "research..."]
-}
+    Args:
+        company_slug: Company identifier used in the prompt context.
 
-Return ONLY valid JSON."""
+    Returns:
+        Fully-formed prompt string ready to send to the LLM.
+    """
+    try:
+        framework = parse_framework()
+    except FileNotFoundError:
+        logger.warning("Memo framework file not found; using fallback section list")
+        framework = []
 
-UPDATE_MEMO_PROMPT = """You are a senior financial analyst updating an investment memo with new data.
+    # Build the section instruction list from the framework
+    if framework:
+        section_instructions = []
+        for section in framework:
+            purpose_snippet = section.purpose[:120] if section.purpose else section.title
+            section_instructions.append(
+                f'- "{section.field_name}": {section.title} -- {purpose_snippet}'
+            )
+        sections_list = "\n".join(section_instructions)
+    else:
+        # Fallback: list the model fields directly so the prompt still works
+        # even if the framework file is missing.
+        sections_list = "\n".join([
+            '- "executive_summary": Executive Summary & Investment Thesis',
+            '- "company_overview": Company Overview & Business Model',
+            '- "market_size": Market Size -- TAM / SAM / SOM',
+            '- "industry_analysis": Industry Trends & Dynamics',
+            '- "competitive_positioning": Competitive Landscape',
+            '- "seven_powers": Seven Powers Analysis',
+            '- "swot_analysis": SWOT Analysis',
+            '- "management_governance": Management Quality & Governance',
+            '- "ownership_structure": Ownership Structure & Shareholder Dynamics',
+            '- "financial_analysis": Financial Analysis',
+            '- "valuation": Valuation',
+            '- "scenario_analysis": Scenario Analysis',
+            '- "risks_mitigants": Risks & Mitigants',
+            '- "catalysts_timeline": Catalysts & Timeline',
+            '- "esg_notes": ESG & Governance Notes',
+            '- "israel_risk_factors": Israel-Specific Risk Factors',
+            '- "investment_conclusion": Qualitative Investment Conclusion',
+            '- "open_questions": Open Questions',
+            '- "action_items": Action Items (return as list of strings)',
+            '- "appendix": Appendix',
+        ])
 
-CURRENT MEMO (v{version}):
-{current_memo}
+    return f"""You are a senior buy-side equity research analyst specializing in Israeli public companies (TASE).
+You are skeptical by default and opinionated by conclusion.
+
+Analyze the attached financial document for company "{company_slug}" and produce a structured investment memo.
+
+ANALYTICAL PHILOSOPHY:
+- Start from skepticism. Default assumption: company has NO structural competitive power.
+- For every tailwind, name a headwind. For every claimed moat, identify the erosion mechanism.
+- Be specific and falsifiable. "Strong brand" is not a strength.
+- If data is insufficient, say so explicitly. Do not fabricate conviction.
+- TASE rewards this approach: Israel's small market makes structural advantages and their absence unusually visible.
+
+Return a JSON object with these text section fields (each 200-800 words of professional analysis):
+
+{sections_list}
+
+Also include these structured fields:
+- "recommendation": one of "buy", "speculative_buy", "hold", "sell", "monitor"
+- "conviction": one of "high", "medium", "low"
+- "thesis_status": one of "new", "confirmed", "revised", "weakening", "broken"
+- "scenarios": list of objects with "name", "probability_pct", "target_price", "currency", "description", "key_assumptions"
+- "risks": list of objects with "category", "severity", "description", "mitigation"
+- "catalysts": list of objects with "description", "timeframe", "impact", "probability"
+
+IMPORTANT:
+- For Israel/TASE companies, always address Israel-specific factors (geopolitical, regulatory, liquidity, currency).
+- Return ONLY valid JSON. No markdown wrapping, no explanation outside the JSON.
+"""
+
+
+def _build_update_prompt(
+    company_slug: str,
+    version: int,
+    current_memo_json: str,
+    filename: str,
+) -> str:
+    """Build the memo update prompt dynamically from the framework file.
+
+    Similar to :func:`_build_memo_prompt` but instructs the LLM to update an
+    existing memo rather than create one from scratch.
+
+    Args:
+        company_slug: Company identifier.
+        version: Current memo version number.
+        current_memo_json: JSON string of the existing memo data.
+        filename: Name of the new document being incorporated.
+
+    Returns:
+        Fully-formed update prompt string.
+    """
+    try:
+        framework = parse_framework()
+    except FileNotFoundError:
+        logger.warning("Memo framework file not found; using fallback section list for update")
+        framework = []
+
+    # Build the section instruction list from the framework
+    if framework:
+        section_instructions = []
+        for section in framework:
+            purpose_snippet = section.purpose[:120] if section.purpose else section.title
+            section_instructions.append(
+                f'- "{section.field_name}": {section.title} -- {purpose_snippet}'
+            )
+        sections_list = "\n".join(section_instructions)
+    else:
+        sections_list = "\n".join([
+            '- "executive_summary": Executive Summary & Investment Thesis',
+            '- "company_overview": Company Overview & Business Model',
+            '- "market_size": Market Size -- TAM / SAM / SOM',
+            '- "industry_analysis": Industry Trends & Dynamics',
+            '- "competitive_positioning": Competitive Landscape',
+            '- "seven_powers": Seven Powers Analysis',
+            '- "swot_analysis": SWOT Analysis',
+            '- "management_governance": Management Quality & Governance',
+            '- "ownership_structure": Ownership Structure & Shareholder Dynamics',
+            '- "financial_analysis": Financial Analysis',
+            '- "valuation": Valuation',
+            '- "scenario_analysis": Scenario Analysis',
+            '- "risks_mitigants": Risks & Mitigants',
+            '- "catalysts_timeline": Catalysts & Timeline',
+            '- "esg_notes": ESG & Governance Notes',
+            '- "israel_risk_factors": Israel-Specific Risk Factors',
+            '- "investment_conclusion": Qualitative Investment Conclusion',
+            '- "open_questions": Open Questions',
+            '- "action_items": Action Items (return as list of strings)',
+            '- "appendix": Appendix',
+        ])
+
+    return f"""You are a senior buy-side equity research analyst updating an investment memo with new data.
+You are skeptical by default and opinionated by conclusion.
+
+ANALYTICAL PHILOSOPHY:
+- Start from skepticism. Default assumption: company has NO structural competitive power.
+- For every tailwind, name a headwind. For every claimed moat, identify the erosion mechanism.
+- Be specific and falsifiable. "Strong brand" is not a strength.
+- If data is insufficient, say so explicitly. Do not fabricate conviction.
+- TASE rewards this approach: Israel's small market makes structural advantages and their absence unusually visible.
+
+CURRENT MEMO (v{version}) for "{company_slug}":
+{current_memo_json}
 
 NEW DOCUMENT: {filename}
 
 Update the memo based on the new financial report. Preserve existing analysis where still valid,
-but update financial figures and revise thesis if warranted.
+but update financial figures and revise thesis if warranted. Pay special attention to populating
+any sections that are currently empty.
 
-Return the COMPLETE updated memo as JSON (same format as original), plus these additional fields:
-  "changes_summary": "2-3 sentence summary of what changed vs the previous version",
-  "thesis_impact": "positive" or "negative" or "neutral"
+Return the COMPLETE updated memo as a JSON object with ALL of these text section fields:
 
-Return ONLY valid JSON."""
+{sections_list}
+
+Also include these structured fields:
+- "recommendation": one of "buy", "speculative_buy", "hold", "sell", "monitor"
+- "conviction": one of "high", "medium", "low"
+- "thesis_status": one of "new", "confirmed", "revised", "weakening", "broken"
+- "scenarios": list of objects with "name", "probability_pct", "target_price", "currency", "description", "key_assumptions"
+- "risks": list of objects with "category", "severity", "description", "mitigation"
+- "catalysts": list of objects with "description", "timeframe", "impact", "probability"
+
+Plus these revision-tracking fields:
+- "changes_summary": 2-3 sentence summary of what changed vs the previous version
+- "thesis_impact": "positive" or "negative" or "neutral"
+
+IMPORTANT:
+- Each text field should contain 200-800 words of professional analysis.
+- For Israel/TASE companies, always address Israel-specific factors.
+- Return ONLY valid JSON. No markdown wrapping, no explanation outside the JSON.
+"""
 
 
 def generate_memo(
@@ -97,13 +226,14 @@ def generate_memo(
         memo_data = current_memo.model_dump(mode="json")
         memo_data.pop("initial_research", None)
         memo_data.pop("revisions", None)
-        prompt = UPDATE_MEMO_PROMPT.format(
+        prompt = _build_update_prompt(
+            company_slug=company_slug,
             version=current_memo.version,
-            current_memo=json.dumps(memo_data, indent=2),
+            current_memo_json=json.dumps(memo_data, indent=2),
             filename=filename,
         )
     else:
-        prompt = MEMO_PROMPT
+        prompt = _build_memo_prompt(company_slug)
 
     try:
         raw_response = router.execute_with_fallback(
