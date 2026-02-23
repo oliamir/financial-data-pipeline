@@ -1,226 +1,325 @@
 companies:
-  - slug: enlight
-    name: Enlight Renewable Energy
-    company_type: tase_traded
-    tase_id: "720"
-    tase_company_id: "720"
-    us_ticker: ENLT
-    us_exchange: NASDAQ
-    ir_url: https://enlightenergy.co.il/investors/financial-reports/
-    ir_platform: wordpress
-    priority: high
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: true
-
-  - slug: energix
-    name: Energix - Renewable Energies
-    company_type: tase_traded
-    tase_id: "1123355"
-    tase_company_id: "1581"
-    ir_url: null
-    ir_platform: null
-    priority: high
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: ormat
-    name: Ormat Technologies
-    company_type: tase_traded
-    tase_id: "1134402"
-    tase_company_id: "2250"
-    us_ticker: ORA
-    us_exchange: NYSE
-    ir_url: https://investor.ormat.com/
-    ir_platform: generic
-    priority: low
-    reporting_currency: USD
-    sector: renewable_energy
-    dual_listed: true
-
-  - slug: doral
-    name: Doral Renewable Energy Resources
-    company_type: tase_traded
-    tase_id: "1166768"
-    tase_company_id: "1801"
-    ir_url: null
-    ir_platform: null
-    priority: low
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: ellomay
-    name: Ellomay Capital
-    company_type: tase_traded
-    tase_id: "1082635"
-    tase_company_id: "2101"
-    us_ticker: ELLO
-    us_exchange: NYSE
-    ir_url: https://www.ellomay.com/investor-relations
-    ir_platform: generic
-    priority: low
-    reporting_currency: USD
-    sector: renewable_energy
-    dual_listed: true
-
-  - slug: apollo
-    name: Apollo Power
-    company_type: tase_traded
-    tase_id: "1082114"
-    tase_company_id: "1074"
-    ir_url: null
-    ir_platform: null
-    priority: high
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: augwind
-    name: Augwind Energy Tech Storage
-    company_type: tase_traded
-    tase_id: "1105907"
-    tase_company_id: "1473"
-    ir_url: null
-    ir_platform: null
-    priority: low
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: electreon
-    name: Electreon Wireless
-    company_type: tase_traded
-    tase_id: "368019"
-    tase_company_id: "368"
-    ir_url: null
-    ir_platform: null
-    priority: low
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: nofar
-    name: Nofar Energy
-    company_type: tase_traded
-    tase_id: "1170877"
-    tase_company_id: "1831"
-    ir_url: null
-    ir_platform: null
-    priority: low
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: meshek
-    name: Meshek Energy - Renewables
-    company_type: tase_traded
-    tase_id: "1166974"
-    tase_company_id: "1803"
-    ir_url: null
-    ir_platform: null
-    priority: low
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: sunflower
-    name: Sunflower Sustainable Investments
-    company_type: tase_traded
-    tase_id: "1098755"
-    tase_company_id: "1062"
-    ir_url: null
-    ir_platform: null
-    priority: low
-    reporting_currency: ILS
-    sector: renewable_energy
-    dual_listed: false
-
-  - slug: sofwave
-    name: Sofwave Medical
-    company_type: tase_traded
-    tase_id: "1175439"
-    tase_company_id: "1886"
-    us_ticker: SOFW
-    us_exchange: NASDAQ
-    ir_url: https://sofwave.com/investors
-    ir_platform: generic
-    priority: high
-    reporting_currency: USD
-    sector: medical_devices
-    dual_listed: true
-
-  - slug: brainsway
-    name: Brainsway
-    company_type: tase_traded
-    tase_id: null
-    tase_company_id: "1386"
-    us_ticker: BWAY
-    us_exchange: NASDAQ
-    ir_url: https://investors.brainsway.com/financial-reports
-    ir_platform: generic
-    priority: high
-    reporting_currency: USD
-    sector: medical_devices
-    dual_listed: true
-
-  - slug: rimoni
-    name: Rimoni Industries
-    company_type: tase_traded
-    tase_id: null
-    tase_company_id: "76"
-    ir_url: null
-    ir_platform: null
-    priority: high
-    reporting_currency: ILS
-    sector: industrial
-    dual_listed: false
-
-  - slug: azrieli
-    name: Azrieli Group
-    company_type: tase_traded
-    tase_id: null
-    tase_company_id: "1420"
-    ir_url: null
-    ir_platform: null
-    priority: high
-    reporting_currency: ILS
-    sector: real_estate
-    dual_listed: false
-
-  - slug: cellcom
-    name: Cellcom Israel
-    company_type: tase_traded
-    tase_id: null
-    tase_company_id: "2066"
-    ir_url: null
-    ir_platform: null
-    priority: high
-    reporting_currency: ILS
-    sector: telecom
-    dual_listed: false
-
-  - slug: ludan
-    name: Ludan Engineering
-    company_type: tase_traded
-    tase_id: null
-    tase_company_id: "1050"
-    ir_url: null
-    ir_platform: null
-    priority: high
-    reporting_currency: ILS
-    sector: engineering
-    dual_listed: false
-
-  - slug: tlsys
-    name: TLSYS
-    company_type: tase_traded
-    tase_id: null
-    tase_company_id: "354"
-    ir_url: null
-    ir_platform: null
-    priority: high
-    reporting_currency: ILS
-    sector: technology
-    dual_listed: false
+- slug: enlight
+  name: Enlight Renewable Energy
+  company_type: tase_traded
+  tase_id: '720'
+  tase_company_id: '720'
+  us_ticker: ENLT
+  us_exchange: NASDAQ
+  ir_url: https://enlightenergy.co.il/investors/financial-reports/
+  ir_platform: wordpress
+  priority: high
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: true
+- slug: energix
+  name: Energix - Renewable Energies
+  company_type: tase_traded
+  tase_id: '1123355'
+  tase_company_id: '1581'
+  ir_url: null
+  ir_platform: null
+  priority: high
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: ormat
+  name: Ormat Technologies
+  company_type: tase_traded
+  tase_id: '1134402'
+  tase_company_id: '2250'
+  us_ticker: ORA
+  us_exchange: NYSE
+  ir_url: https://investor.ormat.com/
+  ir_platform: generic
+  priority: low
+  reporting_currency: USD
+  sector: renewable_energy
+  dual_listed: true
+- slug: doral
+  name: Doral Renewable Energy Resources
+  company_type: tase_traded
+  tase_id: '1166768'
+  tase_company_id: '1801'
+  ir_url: null
+  ir_platform: null
+  priority: low
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: ellomay
+  name: Ellomay Capital
+  company_type: tase_traded
+  tase_id: '1082635'
+  tase_company_id: '2101'
+  us_ticker: ELLO
+  us_exchange: NYSE
+  ir_url: https://www.ellomay.com/investor-relations
+  ir_platform: generic
+  priority: low
+  reporting_currency: USD
+  sector: renewable_energy
+  dual_listed: true
+- slug: apollo
+  name: Apollo Power
+  company_type: tase_traded
+  tase_id: '1082114'
+  tase_company_id: '1074'
+  ir_url: null
+  ir_platform: null
+  priority: high
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: augwind
+  name: Augwind Energy Tech Storage
+  company_type: tase_traded
+  tase_id: '1105907'
+  tase_company_id: '1473'
+  ir_url: null
+  ir_platform: null
+  priority: low
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: electreon
+  name: Electreon Wireless
+  company_type: tase_traded
+  tase_id: '368019'
+  tase_company_id: '368'
+  ir_url: null
+  ir_platform: null
+  priority: low
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: nofar
+  name: Nofar Energy
+  company_type: tase_traded
+  tase_id: '1170877'
+  tase_company_id: '1831'
+  ir_url: null
+  ir_platform: null
+  priority: low
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: meshek
+  name: Meshek Energy - Renewables
+  company_type: tase_traded
+  tase_id: '1166974'
+  tase_company_id: '1803'
+  ir_url: null
+  ir_platform: null
+  priority: low
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: sunflower
+  name: Sunflower Sustainable Investments
+  company_type: tase_traded
+  tase_id: '1098755'
+  tase_company_id: '1062'
+  ir_url: null
+  ir_platform: null
+  priority: low
+  reporting_currency: ILS
+  sector: renewable_energy
+  dual_listed: false
+- slug: sofwave
+  name: Sofwave Medical
+  company_type: tase_traded
+  tase_id: '1175439'
+  tase_company_id: '1886'
+  us_ticker: SOFW
+  us_exchange: NASDAQ
+  ir_url: https://sofwave.com/investors
+  ir_platform: generic
+  priority: high
+  reporting_currency: USD
+  sector: medical_devices
+  dual_listed: true
+- slug: brainsway
+  name: Brainsway
+  company_type: tase_traded
+  tase_id: null
+  tase_company_id: '1386'
+  us_ticker: BWAY
+  us_exchange: NASDAQ
+  ir_url: https://investors.brainsway.com/financial-reports
+  ir_platform: generic
+  priority: high
+  reporting_currency: USD
+  sector: medical_devices
+  dual_listed: true
+- slug: rimoni
+  name: Rimoni Industries
+  company_type: tase_traded
+  tase_id: null
+  tase_company_id: '76'
+  ir_url: null
+  ir_platform: null
+  priority: high
+  reporting_currency: ILS
+  sector: industrial
+  dual_listed: false
+- slug: azrieli
+  name: Azrieli Group
+  company_type: tase_traded
+  tase_id: null
+  tase_company_id: '1420'
+  ir_url: null
+  ir_platform: null
+  priority: high
+  reporting_currency: ILS
+  sector: real_estate
+  dual_listed: false
+- slug: cellcom
+  name: Cellcom Israel
+  company_type: tase_traded
+  tase_id: null
+  tase_company_id: '2066'
+  ir_url: null
+  ir_platform: null
+  priority: high
+  reporting_currency: ILS
+  sector: telecom
+  dual_listed: false
+- slug: ludan
+  name: Ludan Engineering
+  company_type: tase_traded
+  tase_id: null
+  tase_company_id: '1050'
+  ir_url: null
+  ir_platform: null
+  priority: high
+  reporting_currency: ILS
+  sector: engineering
+  dual_listed: false
+- slug: tlsys
+  name: TLSYS
+  company_type: tase_traded
+  tase_id: null
+  tase_company_id: '354'
+  ir_url: null
+  ir_platform: null
+  priority: high
+  reporting_currency: ILS
+  sector: technology
+  dual_listed: false
+- slug: nayax-ltd
+  name: NAYAX LTD.
+  company_type: tase_traded
+  tase_company_id: '1894'
+  priority: high
+  sector: technology
+  reporting_currency: ILS
+  website: www.nayax.com
+- slug: accel-solutions-group-ltd
+  name: ACCEL SOLUTIONS GROUP LTD
+  company_type: tase_traded
+  tase_company_id: '770'
+  priority: low
+  sector: technology
+  reporting_currency: ILS
+  website: www.accel.co.il
+- slug: alony-hetz-properties-investments-ltd
+  name: ALONY HETZ PROPERTIES & INVESTMENTS LTD.
+  company_type: tase_traded
+  tase_company_id: '390'
+  priority: high
+  sector: real_estate
+  reporting_currency: ILS
+  website: www.alony-hetz.com
+- slug: amot-investments-ltd
+  name: AMOT INVESTMENTS LTD.
+  company_type: tase_traded
+  tase_company_id: '1328'
+  priority: high
+  sector: real_estate
+  reporting_currency: ILS
+  website: www.amot.co.il/en
+- slug: automatic-bank-services-limited
+  name: AUTOMATIC BANK SERVICES LIMITED
+  company_type: tase_traded
+  tase_company_id: '1774'
+  priority: high
+  sector: financial
+  reporting_currency: ILS
+  website: www.shva.co.il
+- slug: axon-vision-ltd
+  name: AXON VISION LTD
+  company_type: tase_traded
+  tase_company_id: '2501'
+  priority: high
+  sector: technology
+  reporting_currency: ILS
+- slug: bezeq-the-israeli-telecommunication-corp-ltd
+  name: BEZEQ THE ISRAELI TELECOMMUNICATION CORP. LTD.
+  company_type: tase_traded
+  tase_company_id: '230'
+  priority: high
+  sector: consumer
+  reporting_currency: ILS
+  website: ir.bezeq.co.il
+- slug: delek-automotive-systems-ltd
+  name: DELEK AUTOMOTIVE SYSTEMS LTD.
+  company_type: tase_traded
+  tase_company_id: '829'
+  priority: high
+  sector: consumer
+  reporting_currency: ILS
+- slug: delek-group-ltd
+  name: DELEK GROUP LTD.
+  company_type: tase_traded
+  tase_company_id: '1095'
+  priority: high
+  sector: energy
+  reporting_currency: ILS
+  website: www.delek-group.com
+- slug: delek-israel-properties-dp-ltd
+  name: DELEK ISRAEL PROPERTIES (D.P.) LTD
+  company_type: tase_traded
+  tase_company_id: '2387'
+  priority: high
+  sector: real_estate
+  reporting_currency: ILS
+  website: delek-prop.co.il
+- slug: direct-finance-of-direct-group-2006-ltd
+  name: DIRECT FINANCE OF DIRECT GROUP (2006) LTD
+  company_type: tase_traded
+  tase_company_id: '1675'
+  priority: high
+  sector: financial
+  reporting_currency: ILS
+  website: bit.ly/5555_investors
+- slug: elad-software-systems-ltd
+  name: ELAD SOFTWARE SYSTEMS LTD
+  company_type: tase_traded
+  tase_company_id: '2463'
+  priority: high
+  sector: technology
+  reporting_currency: ILS
+- slug: etga-group-ltd
+  name: ETGA GROUP LTD
+  company_type: tase_traded
+  tase_company_id: '1912'
+  priority: high
+  sector: consumer
+  reporting_currency: ILS
+  website: www.etga.co.il
+- slug: fire-gas-detection-technologies-ltd
+  name: FIRE & GAS DETECTION TECHNOLOGIES LTD.
+  company_type: tase_traded
+  tase_company_id: '1796'
+  priority: high
+  sector: technology
+  reporting_currency: ILS
+- slug: g-1-secure-solutions-ltd
+  name: G 1 SECURE SOLUTIONS LTD.
+  company_type: tase_traded
+  tase_company_id: '1765'
+  priority: high
+  sector: consumer
+  reporting_currency: ILS
+  website: www.g1-group.com/about-us-en

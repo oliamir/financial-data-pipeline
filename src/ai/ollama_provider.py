@@ -20,6 +20,7 @@ class OllamaProvider(BaseProvider):
 
     # Known good models for financial analysis tasks
     PRECONFIGURED_MODELS = [
+        "qwen3:8b",
         "qwen2.5:7b",
         "qwen2.5:14b",
         "llama3.1",
@@ -31,8 +32,8 @@ class OllamaProvider(BaseProvider):
     def __init__(
         self,
         host: Optional[str] = None,
-        model: str = "qwen2.5:7b",
-        fallback_model: Optional[str] = "llama3.1",
+        model: str = "qwen3:8b",
+        fallback_model: Optional[str] = None,
     ):
         self.host = host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
         self.model = model

@@ -1,10 +1,10 @@
 providers:
   ollama:
     type: ollama
-    model: qwen2.5:7b
+    model: qwen3:8b
     host_env: OLLAMA_HOST
     host_default: "http://localhost:11434"
-    fallback_model: llama3.1
+    fallback_model: null
     auto_detect_models: true
     enabled: true
 

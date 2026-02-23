@@ -666,7 +666,7 @@ class TaseMayaDownloader:
         )
 
     def _company_output_dir(self, company: Company) -> Path:
-        name = _slugify(company.slug or company.name)
+        name = company.slug or _slugify(company.name)
         return self.output_root / name
 
     def _download_pdf(self, url: str, target_path: Path) -> bool:
@@ -682,6 +682,7 @@ class TaseMayaDownloader:
         if not content.startswith(b"%PDF"):
             return False
 
+        target_path.parent.mkdir(parents=True, exist_ok=True)
         target_path.write_bytes(content)
         return True
 
