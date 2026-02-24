@@ -6,6 +6,7 @@ rather than direct API usage.
 """
 
 import asyncio
+import concurrent.futures
 import json
 import os
 import shutil
@@ -20,13 +21,53 @@ logger = get_logger(__name__)
 # Attempt SDK import at module level; store availability flag.
 _SDK_AVAILABLE = False
 try:
-    from claude_code_sdk import query as _sdk_query, ClaudeCodeOptions, Message
+    from claude_code_sdk import (
+        query as _sdk_query,
+        ClaudeCodeOptions,
+        Message,
+        AssistantMessage,
+        ResultMessage,
+        SystemMessage as _SystemMessage,
+    )
+    from claude_code_sdk._errors import MessageParseError as _MessageParseError
+
+    # Monkey-patch the SDK message parser to handle unknown message types
+    # (e.g. rate_limit_event) gracefully instead of raising an error that
+    # terminates the entire stream.
+    try:
+        import claude_code_sdk._internal.message_parser as _mp
+        import claude_code_sdk._internal.client as _client_mod
+
+        _original_parse = _mp.parse_message
+
+        def _tolerant_parse(data):
+            try:
+                return _original_parse(data)
+            except _MessageParseError as exc:
+                if "Unknown message type" in str(exc):
+                    # Return a benign SystemMessage so the stream continues.
+                    _mp.logger.debug("Skipping unknown message type: %s", data.get("type"))
+                    return _SystemMessage(
+                        subtype=data.get("type", "unknown"),
+                        data=data,
+                    )
+                raise
+
+        _mp.parse_message = _tolerant_parse
+        # Also patch the reference in the client module that already imported it.
+        if hasattr(_client_mod, "parse_message"):
+            _client_mod.parse_message = _tolerant_parse
+    except Exception:
+        pass  # If patching fails, proceed with original behaviour.
 
     _SDK_AVAILABLE = True
 except ImportError:
     _sdk_query = None
     ClaudeCodeOptions = None
     Message = None
+    AssistantMessage = None
+    ResultMessage = None
+    _MessageParseError = None
 
 
 class ClaudeCodeProvider(BaseProvider):
@@ -47,7 +88,7 @@ class ClaudeCodeProvider(BaseProvider):
 
     # Default timeouts (seconds)
     TEXT_TIMEOUT: int = 300
-    DOCUMENT_TIMEOUT: int = 600
+    DOCUMENT_TIMEOUT: int = 1800
 
     def __init__(
         self,
@@ -96,9 +137,10 @@ class ClaudeCodeProvider(BaseProvider):
 
     @staticmethod
     def _clean_env() -> dict:
-        """Return a copy of the environment with ANTHROPIC_API_KEY removed."""
+        """Return a copy of the environment with ANTHROPIC_API_KEY and CLAUDECODE removed."""
         env = os.environ.copy()
         env.pop("ANTHROPIC_API_KEY", None)
+        env.pop("CLAUDECODE", None)
         return env
 
     # ------------------------------------------------------------------
@@ -118,20 +160,68 @@ class ClaudeCodeProvider(BaseProvider):
             model=self.model_name,
         )
 
-        # Remove ANTHROPIC_API_KEY for the duration of the call so the SDK
-        # routes through the Max subscription.
+        # Remove ANTHROPIC_API_KEY and CLAUDECODE for the duration of the call
+        # so the SDK routes through the Max subscription and doesn't reject
+        # nested session invocations.
         saved_key = os.environ.pop("ANTHROPIC_API_KEY", None)
+        saved_claudecode = os.environ.pop("CLAUDECODE", None)
         try:
             result_parts: list[str] = []
-            async for message in _sdk_query(prompt=prompt, options=options):
-                if isinstance(message, Message):
+            final_result: Optional[str] = None
+            # Wrap the async iteration to gracefully handle unknown message
+            # types (e.g. rate_limit_event) that the SDK doesn't yet support.
+            stream = _sdk_query(prompt=prompt, options=options).__aiter__()
+            while True:
+                try:
+                    message = await stream.__anext__()
+                except StopAsyncIteration:
+                    break
+                except Exception as iter_exc:
+                    # If the SDK raises a MessageParseError for an unknown
+                    # message type, log and skip it rather than aborting.
+                    exc_name = type(iter_exc).__name__
+                    if "MessageParseError" in exc_name or "Unknown message type" in str(iter_exc):
+                        logger.debug("Skipping unrecognised SDK message: %s", iter_exc)
+                        continue
+                    raise
+                # AssistantMessage has .content with text blocks
+                if AssistantMessage is not None and isinstance(message, AssistantMessage):
                     for block in message.content:
                         if hasattr(block, "text"):
                             result_parts.append(block.text)
+                # ResultMessage carries the final aggregated result
+                elif ResultMessage is not None and isinstance(message, ResultMessage):
+                    if message.result:
+                        final_result = message.result
+            # Prefer the ResultMessage.result if available; fall back to
+            # concatenated AssistantMessage blocks.
+            if final_result:
+                return final_result
             return "".join(result_parts)
         finally:
             if saved_key is not None:
                 os.environ["ANTHROPIC_API_KEY"] = saved_key
+            if saved_claudecode is not None:
+                os.environ["CLAUDECODE"] = saved_claudecode
+
+    @staticmethod
+    def _run_in_new_loop(coro, timeout: int) -> str:
+        """Run a coroutine in a brand-new event loop (thread-safe).
+
+        Creates a fresh loop, runs the coroutine, then closes the loop
+        explicitly. This avoids anyio/asyncio cancel-scope conflicts that
+        occur when ``asyncio.run()`` is used inside a thread pool while
+        another loop is active in the parent thread.
+        """
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(
+                asyncio.wait_for(coro, timeout=timeout)
+            )
+        finally:
+            # Shut down async generators and the loop itself.
+            loop.run_until_complete(loop.shutdown_asyncgens())
+            loop.close()
 
     def _run_sdk(
         self,
@@ -139,10 +229,34 @@ class ClaudeCodeProvider(BaseProvider):
         system_prompt: Optional[str] = None,
         timeout: int = TEXT_TIMEOUT,
     ) -> str:
-        """Synchronous wrapper around the async SDK path."""
-        return asyncio.run(
-            self._query_sdk(prompt, system_prompt=system_prompt, timeout=timeout)
-        )
+        """Synchronous wrapper around the async SDK path.
+
+        Handles being called from within an already-running event loop
+        (e.g. the async pipeline runner) by spawning a dedicated thread
+        with its own event loop.
+        """
+
+        # Check if we are inside a running event loop.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop is not None:
+            # Already inside an async context — run the coroutine in a fresh
+            # thread so it gets its own event loop (avoids cancel-scope errors).
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(
+                    self._run_in_new_loop,
+                    self._query_sdk(prompt, system_prompt=system_prompt, timeout=timeout),
+                    timeout,
+                )
+                return future.result(timeout=timeout)
+        else:
+            return self._run_in_new_loop(
+                self._query_sdk(prompt, system_prompt=system_prompt, timeout=timeout),
+                timeout,
+            )
 
     # ------------------------------------------------------------------
     # CLI execution path (fallback)

@@ -12,6 +12,7 @@ Supports:
 
 import asyncio
 import os
+import threading
 from datetime import datetime
 from typing import Optional, List, Set
 
@@ -70,6 +71,7 @@ class PipelineOrchestrator:
             started_at=datetime.now(),
         )
         self._tracker = None
+        self._storage_lock = threading.Lock()
 
     def _get_tracker(self):
         """Lazy-load ProgressTracker to avoid import cycles."""
@@ -272,23 +274,124 @@ class PipelineOrchestrator:
         if tracker:
             tracker.start_step("parse", f"Analyzing {len(unprocessed)} reports")
 
-        for i, file_path in enumerate(unprocessed, 1):
-            filename = os.path.basename(str(file_path))
+        concurrency = int(os.environ.get("PARSE_CONCURRENCY", "1"))
 
-            if tracker:
-                tracker.update_step("parse", f"Processing {i}/{len(unprocessed)}: {filename}")
+        if concurrency > 1:
+            logger.info(f"  Parallel mode: {concurrency} concurrent workers")
+            semaphore = asyncio.Semaphore(concurrency)
+            done_count = 0
 
-            if dry_run:
-                logger.info(f"  [DRY RUN] Would analyze: {filename}")
-                continue
+            async def _process_with_semaphore(idx, fp):
+                nonlocal done_count
+                async with semaphore:
+                    filename = os.path.basename(str(fp))
+                    if dry_run:
+                        logger.info(f"  [DRY RUN] Would analyze: {filename}")
+                        return
+                    try:
+                        await asyncio.to_thread(self._process_single_report_sync, str(fp))
+                    except Exception as e:
+                        logger.error(f"  Failed to process {filename}: {e}")
+                    done_count += 1
+                    if tracker:
+                        tracker.update_step("parse", f"Processed {done_count}/{len(unprocessed)}")
 
-            try:
-                await self._process_single_report(str(file_path))
-            except Exception as e:
-                logger.error(f"  Failed to process {filename}: {e}")
+            tasks = [
+                _process_with_semaphore(i, fp)
+                for i, fp in enumerate(unprocessed, 1)
+            ]
+            await asyncio.gather(*tasks)
+        else:
+            for i, file_path in enumerate(unprocessed, 1):
+                filename = os.path.basename(str(file_path))
+
+                if tracker:
+                    tracker.update_step("parse", f"Processing {i}/{len(unprocessed)}: {filename}")
+
+                if dry_run:
+                    logger.info(f"  [DRY RUN] Would analyze: {filename}")
+                    continue
+
+                try:
+                    await self._process_single_report(str(file_path))
+                except Exception as e:
+                    logger.error(f"  Failed to process {filename}: {e}")
 
         if tracker:
             tracker.complete_step("parse", f"Analyzed {len(unprocessed)} reports")
+
+    def _process_single_report_sync(self, file_path: str) -> None:
+        """Thread-safe synchronous version for parallel processing."""
+        filename = os.path.basename(file_path)
+        logger.info(f"\n  Processing: {filename}")
+
+        # Step 1: Classify (thread-safe, no shared state)
+        doc_type = classify_document(self.router, file_path)
+        with self._storage_lock:
+            self.job.steps.append(StepResult(
+                step=StepName.CLASSIFY,
+                status="success",
+                detail=f"{filename}: {doc_type}",
+            ))
+
+        if not is_financial_document(doc_type):
+            with self._storage_lock:
+                self.storage.mark_processed(file_path)
+            logger.info(f"  → Skipped (type: {doc_type})")
+            return
+
+        # Step 2: Extract financials (thread-safe, no shared state)
+        period = extract_financials(self.router, file_path, self.company.slug)
+        if not period:
+            with self._storage_lock:
+                self.job.steps.append(StepResult(
+                    step=StepName.EXTRACT,
+                    status="failed",
+                    detail=f"{filename}: extraction returned None",
+                ))
+                self.storage.mark_processed(file_path)
+            return
+
+        with self._storage_lock:
+            self.job.steps.append(StepResult(
+                step=StepName.EXTRACT,
+                status="success",
+                detail=f"{filename}: {period.period_type} {period.fiscal_year}",
+            ))
+
+            # Step 3: Save financials
+            self.storage.append_financial(period)
+
+            # Step 4: Calculate KPIs
+            financials = self.storage.load_financials()
+            prior = self._find_prior_period(financials, period)
+            kpi = calculate_kpis(period, prior)
+            self.storage.save_kpis(kpi)
+            self.job.steps.append(StepResult(
+                step=StepName.KPI,
+                status="success",
+            ))
+
+        # Step 5: Generate/update memo (skip if SKIP_PARSE_MEMO is set)
+        if not os.environ.get("SKIP_PARSE_MEMO"):
+            with self._storage_lock:
+                current_memo = self.storage.load_memo()
+            memo = generate_memo(self.router, file_path, self.company.slug, current_memo)
+            if memo:
+                with self._storage_lock:
+                    self.storage.save_memo(memo)
+                    self.job.steps.append(StepResult(
+                        step=StepName.MEMO,
+                        status="success",
+                        detail=f"Recommendation: {memo.recommendation}",
+                    ))
+        else:
+            logger.debug("Skipping per-report memo (SKIP_PARSE_MEMO set)")
+
+        # Mark complete
+        with self._storage_lock:
+            self.storage.mark_processed(file_path)
+        logger.info(f"  → Done: {filename}")
 
     async def _process_single_report(self, file_path: str) -> None:
         """Process a single report through classify → extract → KPI → memo."""
@@ -338,16 +441,19 @@ class PipelineOrchestrator:
             status="success",
         ))
 
-        # Step 5: Generate/update memo
-        current_memo = self.storage.load_memo()
-        memo = generate_memo(self.router, file_path, self.company.slug, current_memo)
-        if memo:
-            self.storage.save_memo(memo)
-            self.job.steps.append(StepResult(
-                step=StepName.MEMO,
-                status="success",
-                detail=f"Recommendation: {memo.recommendation}",
-            ))
+        # Step 5: Generate/update memo (skip if SKIP_PARSE_MEMO is set)
+        if not os.environ.get("SKIP_PARSE_MEMO"):
+            current_memo = self.storage.load_memo()
+            memo = generate_memo(self.router, file_path, self.company.slug, current_memo)
+            if memo:
+                self.storage.save_memo(memo)
+                self.job.steps.append(StepResult(
+                    step=StepName.MEMO,
+                    status="success",
+                    detail=f"Recommendation: {memo.recommendation}",
+                ))
+        else:
+            logger.debug("Skipping per-report memo (SKIP_PARSE_MEMO set)")
 
         # Mark complete
         self.storage.mark_processed(file_path)
