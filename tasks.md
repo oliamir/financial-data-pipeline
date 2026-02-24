@@ -135,6 +135,8 @@ Complete rebuild of the Financial Data Pipeline — automated scraping and AI an
 | 8.6 | Live events tab | ✅ DONE | Real-time event log with type, slug, message |
 | 8.7 | Provider status tab | ✅ DONE | Provider health + task routing display |
 | 8.8 | Progress API | ✅ DONE | `/api/progress`, `/api/events`, `/api/scheduler/status` |
+| 8.9 | Dashboard UI buttons | ✅ DONE | Per-company Download and AI Scrape simple action buttons |
+| 8.10 | Live UI Progress | ✅ DONE | Real-time progress bars for tracked companies |
 
 ---
 

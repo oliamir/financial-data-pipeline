@@ -370,13 +370,13 @@ DASHBOARD_HTML = """
                 <div class="dash-panel">
                     <h3>Coverage</h3>
                     <div id="coverageBars"></div>
-                    <h3 style="margin-top:1.25rem;">Top Companies</h3>
+                    <h3 style="margin-top:1.25rem;">Tracked Companies</h3>
                     <table class="top-table">
                         <thead><tr>
-                            <th>Company</th><th class="n">Rpts</th><th class="n">Per</th>
-                            <th class="n">Fin</th><th class="n">Memo</th>
+                            <th>Company</th><th class="n">Rpts</th><th class="n">Fin</th>
+                            <th style="width:45%; text-align:left;">Actions & Status</th>
                         </tr></thead>
-                        <tbody id="topCompanies"></tbody>
+                        <tbody id="trackedCompanies"></tbody>
                     </table>
                 </div>
                 <div class="dash-panel">
@@ -465,25 +465,42 @@ DASHBOARD_HTML = """
             ).join('');
         }
 
-        function renderTopCompanies(companies) {
-            const tbody = document.getElementById('topCompanies');
-            // Sort by richness score descending, take top 8
+        function renderTrackedCompanies(companies) {
+            const tbody = document.getElementById('trackedCompanies');
+            // Sort to show high priority first, then alphabetically
             const sorted = [...companies].sort((a,b) => {
-                const sa = a.reports_count + a.periods*10 + (a.has_financials?50:0) + (a.has_memo?50:0);
-                const sb = b.reports_count + b.periods*10 + (b.has_financials?50:0) + (b.has_memo?50:0);
-                return sb - sa;
-            }).slice(0, 8);
+                if (a.priority === 'high' && b.priority !== 'high') return -1;
+                if (a.priority !== 'high' && b.priority === 'high') return 1;
+                return a.name.localeCompare(b.name);
+            });
 
             tbody.innerHTML = sorted.map(c =>
                 '<tr>' +
                     '<td><span class="nm">' + c.name + '</span> <span class="sl">' + c.slug + '</span></td>' +
                     '<td class="n">' + c.reports_count + '</td>' +
-                    '<td class="n">' + c.periods + '</td>' +
                     '<td class="n">' + (c.has_financials ? '<span class="ck-y">&#10003;</span>' : '<span class="ck-n">&#8212;</span>') + '</td>' +
-                    '<td class="n">' + (c.has_memo ? '<span class="ck-y">&#10003;</span>' : '<span class="ck-n">&#8212;</span>') + '</td>' +
+                    '<td>' +
+                        '<div class="run-controls" style="gap:0.4rem; justify-content:flex-start;">' +
+                            '<button class="btn btn-sm" onclick="runPipeline(\\''+c.slug+'\\', \\'download\\')" style="background:#0f766e">Download</button>' +
+                            '<button class="btn btn-sm" onclick="runPipeline(\\''+c.slug+'\\', \\'parse\\')" style="background:#5b21b6">AI Scrape</button>' +
+                            '<div style="flex:1; margin-left:8px; min-width:80px;">' +
+                                '<div class="progress" style="width:100%" id="dash-prog-'+c.slug+'"><div class="progress-bar" style="width:0%"></div></div>' +
+                                '<div id="dash-stat-'+c.slug+'" style="font-size:0.65rem; color:#94a3b8; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="Ready">Ready</div>' +
+                            '</div>' +
+                        '</div>' +
+                    '</td>' +
                 '</tr>'
             ).join('');
+            
+            // Fetch initial progress
+            fetch('/api/progress').then(r => r.json()).then(data => {
+                Object.keys(data).forEach(slug => {
+                    const prog = data[slug];
+                    updateDashboardProgress(slug, prog.progress_pct, prog.current_step);
+                });
+            });
         }
+
 
         // ─── Priority List tab ───
 
@@ -659,7 +676,7 @@ DASHBOARD_HTML = """
                 allCompanies = data;
                 renderSummary(data);
                 renderCoverage(data);
-                renderTopCompanies(data);
+                renderTrackedCompanies(data);
                 renderPrioritySection(data);
                 loadProviders();
             });
@@ -667,12 +684,16 @@ DASHBOARD_HTML = """
 
         // ─── Run pipeline ───
 
-        function runPipeline(slug) {
+        function runPipeline(slug, forceStep) {
             const pSel = document.getElementById('prov-' + slug);
             const sSel = document.getElementById('step-' + slug);
             const body = {};
             if (pSel && pSel.value) body.provider = pSel.value;
-            if (sSel && sSel.value) body.steps = sSel.value;
+            if (forceStep) {
+                body.steps = forceStep;
+            } else if (sSel && sSel.value) {
+                body.steps = sSel.value;
+            }
 
             fetch('/api/company/' + slug + '/run', {
                 method: 'POST',
@@ -680,8 +701,20 @@ DASHBOARD_HTML = """
                 body: JSON.stringify(body),
             }).then(r => r.json()).then(data => {
                 if (data.error) alert('Error: ' + data.error);
-                else addEvent('pipeline.started', slug, 'Pipeline started');
+                else addEvent('pipeline.started', slug, 'Pipeline started: ' + (body.steps || 'all steps'));
             }).catch(err => alert('Failed: ' + err));
+        }
+
+        function updateDashboardProgress(slug, pct, statusText) {
+            const pg = document.getElementById('dash-prog-' + slug);
+            if (pg && pct !== undefined) {
+                pg.querySelector('.progress-bar').style.width = pct + '%';
+            }
+            const st = document.getElementById('dash-stat-' + slug);
+            if (st && statusText) {
+                st.textContent = statusText;
+                st.title = statusText;
+            }
         }
 
         // ─── WebSocket ───
@@ -701,8 +734,14 @@ DASHBOARD_HTML = """
                 addEvent(evt.event_type, evt.company_slug, evt.message);
                 if (evt.company_slug) {
                     const pg = document.getElementById('progress-' + evt.company_slug);
-                    if (pg && evt.data && evt.data.progress_pct)
+                    if (pg && evt.data && evt.data.progress_pct !== undefined)
                         pg.querySelector('.progress-bar').style.width = evt.data.progress_pct + '%';
+                        
+                    if (evt.data && evt.data.progress_pct !== undefined) {
+                        updateDashboardProgress(evt.company_slug, evt.data.progress_pct, evt.data.current_step || evt.message);
+                    } else {
+                        updateDashboardProgress(evt.company_slug, undefined, evt.message);
+                    }
                 }
                 // Refresh data when a pipeline step completes or pipeline finishes
                 const t = evt.event_type || '';
@@ -1087,14 +1126,11 @@ def api_providers_routing():
 
 @app.route("/api/progress")
 def api_progress():
-    """Get active pipeline progress from ProgressTracker."""
+    """Get active pipeline progress from ProgressTracker (returns dict)."""
     try:
         from ..progress import ProgressTracker
         trackers = ProgressTracker.get_active()
-        return jsonify({
-            slug: tracker.to_dict()
-            for slug, tracker in trackers.items()
-        })
+        return jsonify(trackers)
     except ImportError:
         return jsonify({})
 
@@ -1106,7 +1142,7 @@ def api_progress_detail(slug: str):
         from ..progress import ProgressTracker
         tracker = ProgressTracker.get_tracker(slug)
         if tracker:
-            return jsonify(tracker.to_dict())
+            return jsonify(tracker)
         return jsonify({"error": "No active tracker"}), 404
     except ImportError:
         return jsonify({"error": "Progress module not available"}), 500
@@ -1135,6 +1171,66 @@ def api_scheduler_status():
         return jsonify(sched.get_status())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ---------------------------------------------------------------------------
+# Cross-Process Live Polling Thread
+# ---------------------------------------------------------------------------
+def _start_ipc_polling_thread():
+    """Poll the file-based IPC progress states to notify WS clients."""
+    if not HAS_SOCKETIO:
+        return
+
+    def poll_loop():
+        try:
+            from ..progress import ProgressTracker
+        except ImportError:
+            return
+            
+        last_states = {}
+        
+        while True:
+            try:
+                # Read disk + memory states
+                current = ProgressTracker.get_active()
+                
+                for slug, tracker_data in current.items():
+                    # Simplified change detection
+                    curr_str = json.dumps(tracker_data, sort_keys=True)
+                    prev_str = last_states.get(slug)
+                    
+                    if curr_str != prev_str:
+                        last_states[slug] = curr_str
+                        
+                        # Emit synthetic progress update to clients
+                        socketio.emit("pipeline_event", {
+                            "event_type": "progress.update",
+                            "company_slug": slug,
+                            "step_name": tracker_data.get("current_step", ""),
+                            "message": tracker_data.get("current_step", "Running..."),
+                            "data": {
+                                "progress_pct": tracker_data.get("progress_pct", 0),
+                                "current_step": tracker_data.get("current_step", ""),
+                            },
+                        })
+                        
+                        # If completed/failed, emit synthetic completion to trigger reload
+                        status = tracker_data.get("status")
+                        if status in ("completed", "failed") and prev_str:
+                            socketio.emit("pipeline_event", {
+                                "event_type": f"pipeline.{status}",
+                                "company_slug": slug,
+                                "message": f"Pipeline {status}",
+                                "data": {},
+                            })
+                            
+            except Exception as e:
+                logger.debug(f"IPC poll error: {e}")
+                
+            time.sleep(1.0)  # Poll once per second
+
+    t = threading.Thread(target=poll_loop, daemon=True, name="ipc-poller")
+    t.start()
 
 
 # ---------------------------------------------------------------------------
@@ -1171,6 +1267,7 @@ if HAS_SOCKETIO:
 def run_dashboard(host: str = "0.0.0.0", port: int = 8050, debug: bool = False):
     """Start the web dashboard."""
     _setup_event_bridge()
+    _start_ipc_polling_thread()
 
     logger.info(f"Starting dashboard on {host}:{port}")
     logger.info(f"WebSocket: {'enabled' if HAS_SOCKETIO else 'disabled'}")

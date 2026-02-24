@@ -9,6 +9,8 @@ Both the terminal dashboard and web dashboard subscribe to
 the EventBus to receive real-time progress updates.
 """
 
+import os
+import json
 import threading
 import time
 from dataclasses import dataclass, field
@@ -16,6 +18,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
+from ..storage.paths import progress_json, events_jsonl
 from ..utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -180,6 +183,15 @@ class EventBus:
         if len(self._event_history) > self._max_history:
             self._event_history = self._event_history[-self._max_history:]
 
+        # Write to JSONL for cross-process IPC
+        try:
+            log_path = events_jsonl()
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event.to_dict()) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to write event to IPC log: {e}")
+
         with self._sub_lock:
             handlers = list(self._wildcard_subscribers)
             specific = self._subscribers.get(event.event_type.value, [])
@@ -199,12 +211,51 @@ class EventBus:
         company_slug: Optional[str] = None,
         event_type: Optional[EventType] = None,
     ) -> List[PipelineEvent]:
-        """Get recent events, optionally filtered."""
-        events = self._event_history
-        if company_slug:
-            events = [e for e in events if e.company_slug == company_slug]
-        if event_type:
-            events = [e for e in events if e.event_type == event_type]
+        """Get recent events, optionally filtered, including IPC events."""
+        events = []
+        
+        # Read from IPC log first if it exists
+        try:
+            log_path = events_jsonl()
+            if os.path.exists(log_path):
+                # Read tail efficiently
+                with open(log_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()[-limit*2:]  # Grab extra in case of filters
+                
+                for line in lines:
+                    if not line.strip():
+                        continue
+                    try:
+                        data = json.loads(line)
+                        if company_slug and data.get("company_slug") != company_slug:
+                            continue
+                        if event_type and data.get("event_type") != event_type.value:
+                            continue
+                            
+                        # Reconstruct basic event (ignoring exact typing for UI needs)
+                        e = PipelineEvent(
+                            event_type=EventType(data.get("event_type", EventType.PROGRESS_MESSAGE)),
+                            company_slug=data.get("company_slug", ""),
+                            step_name=data.get("step_name", ""),
+                            message=data.get("message", ""),
+                            data=data.get("data", {}),
+                        )
+                        # Set timestamp if present, otherwise ignore strict hydration
+                        if data.get("timestamp"):
+                            try:
+                                e.timestamp = datetime.fromisoformat(data["timestamp"])
+                            except: pass
+                        events.append(e)
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as e:
+            logger.error(f"Failed to read IPC events: {e}")
+            events = [e for e in self._event_history]
+            if company_slug:
+                events = [e for e in events if e.company_slug == company_slug]
+            if event_type:
+                events = [e for e in events if e.event_type == event_type]
+                
         return events[-limit:]
 
     def clear_history(self) -> None:
@@ -269,16 +320,69 @@ class ProgressTracker:
             self._active[company_slug] = self
 
     @classmethod
-    def get_active(cls) -> Dict[str, "ProgressTracker"]:
-        """Get all active trackers (read-only copy)."""
+    def get_active(cls) -> Dict[str, Dict[str, Any]]:
+        """Get all active trackers (cross-process, read from disk + memory)."""
+        active = {}
+        
+        # First check in-memory
         with cls._active_lock:
-            return dict(cls._active)
+            for slug, tracker in cls._active.items():
+                active[slug] = tracker.to_dict()
+                
+        # Then check disk for cross-process trackers
+        try:
+            from ..storage.paths import _DATA_ROOT
+            if _DATA_ROOT.exists():
+                for comp_dir in _DATA_ROOT.iterdir():
+                    if comp_dir.is_dir():
+                        slug = comp_dir.name
+                        prog_file = comp_dir / "progress.json"
+                        if prog_file.exists() and slug not in active:
+                            try:
+                                # Only load recently active trackers (last 2 hours)
+                                mtime = prog_file.stat().st_mtime
+                                if (time.time() - mtime) < 7200:
+                                    with open(prog_file, "r", encoding="utf-8") as f:
+                                        data = json.load(f)
+                                        if data.get("status") in ("running", "idle"):
+                                            active[slug] = data
+                            except Exception:
+                                pass
+        except Exception as e:
+            logger.debug(f"Error reading IPC progress: {e}")
+            
+        return active
 
     @classmethod
-    def get_tracker(cls, slug: str) -> Optional["ProgressTracker"]:
-        """Get the tracker for a specific company."""
+    def get_tracker(cls, slug: str) -> Optional[Dict[str, Any]]:
+        """Get the tracker data for a specific company (cross-process)."""
+        # First check memory
         with cls._active_lock:
-            return cls._active.get(slug)
+            tracker = cls._active.get(slug)
+            if tracker:
+                return tracker.to_dict()
+                
+        # Then check disk
+        try:
+            from ..storage.paths import progress_json
+            prog_file = progress_json(slug)
+            if os.path.exists(prog_file):
+                with open(prog_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception:
+            pass
+            
+        return None
+
+    def _persist(self) -> None:
+        """Write current tracker state to disk for IPC sync."""
+        try:
+            path = progress_json(self.company_slug)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.to_dict(), f)
+        except Exception as e:
+            logger.error(f"Failed to persist progress for {self.company_slug}: {e}")
 
     # -- Pipeline lifecycle ------------------------------------------------
 
@@ -295,6 +399,7 @@ class ProgressTracker:
             message=f"Pipeline started for {self.company_slug}",
             data={"requested_steps": requested_steps or []},
         ))
+        self._persist()
 
     def complete_pipeline(self) -> None:
         """Mark the pipeline as completed."""
@@ -312,6 +417,7 @@ class ProgressTracker:
                 "steps_failed": sum(1 for s in self.steps.values() if s.status == "failed"),
             },
         ))
+        self._persist()
 
     def fail_pipeline(self, error: str) -> None:
         """Mark the pipeline as failed."""
@@ -324,6 +430,7 @@ class ProgressTracker:
             message=f"Pipeline failed for {self.company_slug}: {error}",
             data={"error": error},
         ))
+        self._persist()
 
     # -- Step lifecycle ----------------------------------------------------
 
@@ -343,6 +450,7 @@ class ProgressTracker:
             step_name=step_name,
             message=message or f"Starting {step_name}",
         ))
+        self._persist()
 
     def update_step(self, step_name: str, message: str, detail: str = "") -> None:
         """Update progress message for a running step."""
@@ -357,6 +465,7 @@ class ProgressTracker:
             message=message,
             data={"detail": detail},
         ))
+        self._persist()
 
     def complete_step(self, step_name: str, detail: str = "") -> None:
         """Mark a step as completed."""
@@ -373,6 +482,7 @@ class ProgressTracker:
             message=f"{step_name} completed" + (f" ({detail})" if detail else ""),
             data={"detail": detail, "duration_seconds": duration},
         ))
+        self._persist()
 
     def fail_step(self, step_name: str, error: str) -> None:
         """Mark a step as failed."""
@@ -388,6 +498,7 @@ class ProgressTracker:
             message=f"{step_name} failed: {error}",
             data={"error": error},
         ))
+        self._persist()
 
     def skip_step(self, step_name: str, reason: str = "") -> None:
         """Mark a step as skipped."""
@@ -404,6 +515,7 @@ class ProgressTracker:
             step_name=step_name,
             message=reason or f"{step_name} skipped",
         ))
+        self._persist()
 
     # -- Status ------------------------------------------------------------
 
@@ -454,6 +566,15 @@ class ProgressTracker:
         }
 
     def cleanup(self) -> None:
-        """Remove this tracker from the active registry."""
+        """Remove this tracker from the active registry and delete IPC file."""
         with self._active_lock:
             self._active.pop(self.company_slug, None)
+            
+        try:
+            path = progress_json(self.company_slug)
+            if os.path.exists(path):
+                # Optionally delete or keep it around as finished history
+                # os.remove(path)
+                pass
+        except Exception:
+            pass

@@ -89,6 +89,16 @@ def kpi_json(slug: str) -> str:
     return str(_DATA_ROOT / slug / "kpi.json")
 
 
+def progress_json(slug: str) -> str:
+    """Return the progress.json path as a string."""
+    return str(_DATA_ROOT / slug / "progress.json")
+
+
 def financials_csv(slug: str) -> str:
     """Return the financials CSV path (legacy compat) as a string."""
     return str(_DATA_ROOT / slug / "Financial_Model.csv")
+
+
+def events_jsonl() -> str:
+    """Return the global events.jsonl path as a string."""
+    return str(_DATA_ROOT.parent / "events.jsonl")
