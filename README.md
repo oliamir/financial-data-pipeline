@@ -39,6 +39,23 @@ An autonomous AI agent ensuring sequential, robust processing of financial repor
 
 ## Usage
 
+### TASE Maya Event Downloader (Headless)
+Fetch financial/immediate reports directly from Maya event pages.
+```bash
+# Priority pilot list (apollo, brainsway, sofwave, azrieli, ludan)
+./venv/bin/python -m cli.main tase-fetch --years 1
+
+# Manual backfill window (up to 10 years)
+./venv/bin/python -m cli.main tase-fetch --companies apollo --years 5 --no-incremental
+
+# Incremental manual update (default behavior)
+./venv/bin/python -m cli.main tase-fetch --companies apollo --incremental
+
+# All configured TASE companies
+./venv/bin/python -m cli.main tase-fetch --all-companies --years 1
+```
+Output is versioned under `downloads/tase_maya/<company>/<YYYY-Q#>/` with `.json` metadata sidecars.
+
 ### 1. The Robust Monitor (Recommended) 🛡️
 The best way to run the system. It manages the queue, handles crashes, and enforces priority (Sofwave > Apollo).
 ```bash
@@ -83,4 +100,3 @@ python3 bin/verify_completion.py
 
 ## Documentation
 See [system_architecture.md](system_architecture.md) for a deep dive into the code structure and logic.
-

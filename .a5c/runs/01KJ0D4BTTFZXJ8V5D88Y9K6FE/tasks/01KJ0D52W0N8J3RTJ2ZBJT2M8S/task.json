@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "2026.01.tasks-v1",
+  "effectId": "01KJ0D52W0N8J3RTJ2ZBJT2M8S",
+  "taskId": "plan-phase",
+  "invocationKey": "finance-pipeline-rebuild:S000001:plan-phase",
+  "stepId": "S000001",
+  "kind": "agent",
+  "title": "Plan: Foundation (Phase 1/9)",
+  "description": "Plan implementation for phase: Poetry project setup, Pydantic models, config loader, storage layer, utils, CLI skeleton, test infrastructure",
+  "labels": [
+    "phase-1-foundation",
+    "planning"
+  ],
+  "io": {
+    "inputJsonPath": "tasks/01KJ0D52W0N8J3RTJ2ZBJT2M8S/input.json",
+    "outputJsonPath": "tasks/01KJ0D52W0N8J3RTJ2ZBJT2M8S/result.json"
+  },
+  "inputs": {
+    "phase": {
+      "description": "Poetry project setup, Pydantic models, config loader, storage layer, utils, CLI skeleton, test infrastructure",
+      "id": "phase-1-foundation",
+      "maxIterations": 3,
+      "name": "Foundation",
+      "tasks": [
+        "Initialize Poetry project with pyproject.toml and all dependencies (pydantic, typer, playwright, google-generativeai, ollama, anthropic, openai, openpyxl, flask, flask-socketio, rich, pdfplumber, pandas, etc.)",
+        "Create all Pydantic v2 data models in src/models/: company.py (Company, CompanyType enum), document.py (DocumentMetadata, DocumentType), financial.py (FinancialPeriod, IncomeStatement ~25 items, BalanceSheet ~30 items, CashFlow ~25 items, PerShareData), kpi.py (KPIMetrics with .calculate() classmethod for margins, ratios, growth, valuation multiples), memo.py (InvestmentMemo with 13 sections, Scenario, Risk, Catalyst), research.py (MarketResearch, SWOT, CompSet, IndustryTrend), job.py (PipelineJob, StepResult, StepName enum)",
+        "Create config/ directory with companies.yaml (with company_type: us_traded|tase_traded|private), providers.yaml (with routing table), settings.yaml. Create src/config/loader.py and settings.py for YAML loading + validation",
+        "Create src/storage/paths.py (centralized path conventions for data/companies/<slug>/) and file_manager.py (CRUD for company artifacts)",
+        "Create src/utils/: pdf.py (PDF text extraction + financial page scoring heuristic from v1), json_fix.py (accounting notation + comma number fixing from v1), currency.py (conversion helpers), logging.py (structured logging)",
+        "Create CLI skeleton with Typer: cli/main.py, cli/commands/list_cmd.py, cli/commands/status.py. Wire up finance list and finance status commands",
+        "Create .env.example, .gitignore (include venv/, .env, downloads/, output/, logs/, __pycache__/, *.pyc, token.pickle, credentials.json)",
+        "Set up tests/ with conftest.py, tests/unit/test_models.py, tests/unit/test_kpi_calculations.py, tests/unit/test_json_fix.py",
+        "Create src/__init__.py and src/__main__.py entry point"
+      ],
+      "verification": "Run: cd projectDir && poetry install && poetry run python -m pytest tests/unit/ -v && poetry run python -m cli.main list --help && poetry run python -m cli.main status --help. All must pass. Verify all model files exist and import correctly."
+    },
+    "phaseIndex": 1,
+    "planFile": "/Users/amiroliker/.claude/plans/snappy-swinging-rabbit.md",
+    "previousPhases": [],
+    "projectDir": "/Users/amiroliker/Library/CloudStorage/GoogleDrive-oliamir@gmail.com/My Drive/Apps/finance",
+    "totalPhases": 9
+  }
+}

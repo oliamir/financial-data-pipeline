@@ -50,22 +50,46 @@ class TaskRouter:
             return self.providers.get("gemini")
         return None
 
+    def _fallback_provider(self, failed_name: str) -> BaseProvider:
+        """Get a fallback provider when the primary one fails at runtime."""
+        if failed_name != "gemini" and self.providers.has("gemini"):
+            return self.providers.get("gemini")
+        for name in self.providers.available():
+            if name != failed_name:
+                return self.providers.get(name)
+        raise RuntimeError(f"No fallback provider available (failed: {failed_name})")
+
     def classify(self, file_path: str) -> str:
         """Classify a document. Returns document type string."""
         provider = self._get_extraction_provider()
-        return classify_document(provider, file_path)
+        try:
+            return classify_document(provider, file_path)
+        except Exception as e:
+            print(f"  [Router] Classification failed with primary provider: {e}")
+            fallback = self._fallback_provider(self.policy.ai_provider_extraction)
+            print(f"  [Router] Falling back to {type(fallback).__name__}...")
+            return classify_document(fallback, file_path)
 
     def extract(self, file_path: str, company_slug: str) -> tuple[list[FinancialMetric], str]:
         """Extract financials with optional validation. Returns (metrics, provider_name)."""
         extractor = self._get_extraction_provider()
         validator = self._get_validation_provider()
 
-        # Step 1: Extract with primary provider
-        raw = extract_financials(extractor, file_path)
+        # Step 1: Extract with primary provider (with runtime fallback)
         provider_name = self.policy.ai_provider_extraction
+        try:
+            raw = extract_financials(extractor, file_path)
+        except Exception as e:
+            print(f"  [Router] Extraction failed with {provider_name}: {e}")
+            if self.providers.has("gemini") and provider_name != "gemini":
+                print(f"  [Router] Falling back to Gemini...")
+                raw = extract_financials(self.providers.get("gemini"), file_path)
+                provider_name = "gemini_fallback"
+            else:
+                return [], provider_name
 
         if "error" in raw:
-            # Extraction failed - escalate to Gemini if available
+            # Extraction returned error in response - escalate to Gemini if available
             if self.providers.has("gemini") and provider_name != "gemini":
                 print(f"  [Router] Extraction failed with {provider_name}, escalating to Gemini...")
                 gemini = self.providers.get("gemini")
@@ -111,4 +135,10 @@ class TaskRouter:
     ) -> InvestmentMemo:
         """Generate or update investment memo."""
         provider = self._get_memo_provider()
-        return generate_memo(provider, file_path, company_slug, current_memo)
+        try:
+            return generate_memo(provider, file_path, company_slug, current_memo)
+        except Exception as e:
+            print(f"  [Router] Memo generation failed with primary provider: {e}")
+            fallback = self._fallback_provider(self.policy.ai_provider_memo)
+            print(f"  [Router] Falling back to {type(fallback).__name__}...")
+            return generate_memo(fallback, file_path, company_slug, current_memo)

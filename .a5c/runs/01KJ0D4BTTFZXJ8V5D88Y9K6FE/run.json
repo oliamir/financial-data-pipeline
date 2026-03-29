@@ -1,0 +1,13 @@
+{
+  "runId": "01KJ0D4BTTFZXJ8V5D88Y9K6FE",
+  "request": "finance-pipeline-rebuild",
+  "processId": "finance-pipeline-rebuild",
+  "entrypoint": {
+    "importPath": "../../processes/finance-pipeline-rebuild.js",
+    "exportName": "process"
+  },
+  "processPath": "../../processes/finance-pipeline-rebuild.js",
+  "layoutVersion": "2026.01-storage-preview",
+  "createdAt": "2026-02-21T15:29:44.292Z",
+  "completionSecret": "60e31b5a1cf62f05356041f23a1e9222"
+}

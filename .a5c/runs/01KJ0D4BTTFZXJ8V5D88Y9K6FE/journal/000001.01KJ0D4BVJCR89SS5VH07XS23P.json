@@ -1,0 +1,14 @@
+{
+  "type": "RUN_CREATED",
+  "recordedAt": "2026-02-21T15:29:44.306Z",
+  "data": {
+    "runId": "01KJ0D4BTTFZXJ8V5D88Y9K6FE",
+    "processId": "finance-pipeline-rebuild",
+    "entrypoint": {
+      "importPath": "../../processes/finance-pipeline-rebuild.js",
+      "exportName": "process"
+    },
+    "inputsRef": "inputs.json"
+  },
+  "checksum": "943fe71b9ff90a60e7d15ac0a066202ff798c6725ae837553579bdfa72a9419b"
+}

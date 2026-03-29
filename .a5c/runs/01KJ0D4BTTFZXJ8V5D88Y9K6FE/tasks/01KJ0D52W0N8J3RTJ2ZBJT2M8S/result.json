@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "2026.01.results-v1",
+  "effectId": "01KJ0D52W0N8J3RTJ2ZBJT2M8S",
+  "taskId": "plan-phase",
+  "invocationKey": "finance-pipeline-rebuild:S000001:plan-phase",
+  "status": "ok",
+  "result": {
+    "fileCount": 38,
+    "keyDecisions": [
+      "Pydantic v2 BaseModel replaces all dataclasses -- automatic validation, serialization, schema generation eliminate manual to_dict() boilerplate",
+      "Nested financial models (FinancialPeriod containing IncomeStatement/BalanceSheet/CashFlow/PerShareData) replace flat FinancialMetric rows -- enables type-safe access and maps directly to Excel sheet structure",
+      "JSON storage replaces CSV for financials -- Pydantic models serialize naturally to JSON and preserve nested structures",
+      "CompanyPaths class replaces module-level path functions -- uses pathlib.Path, instantiable with custom data roots for testing",
+      "Explicit CompanyType enum (us_traded/tase_traded/private) in YAML config replaces implicit inference from dual_listed + us_ticker",
+      "KPIMetrics.calculate() classmethod expanded from 6 ratios (v1) to 26 across 7 categories (margins, growth, profitability, leverage, liquidity, working capital, valuation)",
+      "Typer CLI with Rich tables replaces argparse -- provides type hints, auto-generated help, and finance entry point via pyproject.toml",
+      "pydantic-settings for environment variables replaces scattered os.getenv() calls",
+      "companies.yaml migration adds company_type field to all 18 existing companies; providers.yaml gains a routing table section",
+      "Test fixtures in conftest.py provide sample_company, sample_financial_period, and prior_financial_period for consistent test data across all unit test modules"
+    ],
+    "summary": "Phase 1 Foundation plan covers 38 files (~2,200 lines) across 9 tasks: Poetry project setup with pyproject.toml, 7 Pydantic v2 data models (company, document, financial with ~80 line items across IS/BS/CF/PerShare, KPIMetrics with 26-ratio calculate() classmethod, memo with 13 sections, research with SWOT/comps/industry trends, job tracking), config loader with pydantic-settings, CompanyPaths storage class, 4 utility modules ported from v1 (pdf scoring, json_fix, currency, logging), Typer CLI with list and status commands using Rich tables, .env.example/.gitignore, and full test infrastructure with conftest fixtures and 3 unit test modules (models, KPI calculations, json_fix)."
+  },
+  "startedAt": "2026-02-21T15:38:14.657Z",
+  "finishedAt": "2026-02-21T15:38:14.657Z",
+  "value": {
+    "fileCount": 38,
+    "keyDecisions": [
+      "Pydantic v2 BaseModel replaces all dataclasses -- automatic validation, serialization, schema generation eliminate manual to_dict() boilerplate",
+      "Nested financial models (FinancialPeriod containing IncomeStatement/BalanceSheet/CashFlow/PerShareData) replace flat FinancialMetric rows -- enables type-safe access and maps directly to Excel sheet structure",
+      "JSON storage replaces CSV for financials -- Pydantic models serialize naturally to JSON and preserve nested structures",
+      "CompanyPaths class replaces module-level path functions -- uses pathlib.Path, instantiable with custom data roots for testing",
+      "Explicit CompanyType enum (us_traded/tase_traded/private) in YAML config replaces implicit inference from dual_listed + us_ticker",
+      "KPIMetrics.calculate() classmethod expanded from 6 ratios (v1) to 26 across 7 categories (margins, growth, profitability, leverage, liquidity, working capital, valuation)",
+      "Typer CLI with Rich tables replaces argparse -- provides type hints, auto-generated help, and finance entry point via pyproject.toml",
+      "pydantic-settings for environment variables replaces scattered os.getenv() calls",
+      "companies.yaml migration adds company_type field to all 18 existing companies; providers.yaml gains a routing table section",
+      "Test fixtures in conftest.py provide sample_company, sample_financial_period, and prior_financial_period for consistent test data across all unit test modules"
+    ],
+    "summary": "Phase 1 Foundation plan covers 38 files (~2,200 lines) across 9 tasks: Poetry project setup with pyproject.toml, 7 Pydantic v2 data models (company, document, financial with ~80 line items across IS/BS/CF/PerShare, KPIMetrics with 26-ratio calculate() classmethod, memo with 13 sections, research with SWOT/comps/industry trends, job tracking), config loader with pydantic-settings, CompanyPaths storage class, 4 utility modules ported from v1 (pdf scoring, json_fix, currency, logging), Typer CLI with list and status commands using Rich tables, .env.example/.gitignore, and full test infrastructure with conftest fixtures and 3 unit test modules (models, KPI calculations, json_fix)."
+  }
+}

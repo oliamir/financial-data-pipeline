@@ -1,17 +1,20 @@
 providers:
+  ollama:
+    type: ollama
+    model: qwen3:8b
+    host_env: OLLAMA_HOST
+    host_default: "http://localhost:11434"
+    fallback_model: null
+    auto_detect_models: true
+    enabled: true
+
   gemini:
     type: google
     model: gemini-2.0-flash
     api_key_env: GOOGLE_API_KEY
     max_retries: 3
     rate_limit_delay: 10
-
-  ollama:
-    type: ollama
-    model: qwen2.5:7b
-    host_env: OLLAMA_HOST
-    host_default: "http://localhost:11434"
-    fallback_model: llama3.1
+    enabled: false                    # Only used when explicitly requested via --provider gemini
 
   anthropic:
     type: anthropic
@@ -24,3 +27,33 @@ providers:
     model: gpt-4o
     api_key_env: OPENAI_API_KEY
     enabled: false
+
+  gemini_deep:
+    type: google
+    model: gemini-3.1-pro-preview
+    api_key_env: GOOGLE_API_KEY
+    max_retries: 3
+    rate_limit_delay: 15
+    enabled: false                    # Only used by initial_research step directly
+
+  claude_code:
+    type: claude_code
+    model: claude-sonnet-4-6
+    enabled: true                     # Uses Max subscription via claude CLI auth
+
+routing:
+  classify:
+    primary: ollama
+    fallback: []
+  extract:
+    primary: ollama
+    fallback: []
+  memo:
+    primary: ollama
+    fallback: []
+  research:
+    primary: ollama
+    fallback: []
+  initial_research:
+    primary: claude_code
+    fallback: [gemini_deep, gemini]

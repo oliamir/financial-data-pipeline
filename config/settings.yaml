@@ -1,0 +1,27 @@
+pipeline:
+  data_dir: data/companies
+  downloads_dir: downloads
+  output_dir: output
+  max_concurrent_companies: 3
+  default_years_back: 1
+
+scraping:
+  tase_timeout_seconds: 120
+  tase_max_pages: 8
+  page_load_timeout: 30000
+  headless: true
+
+web:
+  host: 0.0.0.0
+  port: 8050
+  debug: false
+
+scheduler:
+  high_priority_interval_hours: 24
+  low_priority_interval_hours: 168
+  enabled: false
+
+logging:
+  level: INFO
+  format: structured
+  log_dir: logs

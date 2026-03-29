@@ -1,0 +1,18 @@
+{
+  "type": "EFFECT_REQUESTED",
+  "recordedAt": "2026-02-21T15:38:20.271Z",
+  "data": {
+    "effectId": "01KJ0DM3PZMHQXNCQ3J90JRHEN",
+    "invocationKey": "finance-pipeline-rebuild:S000002:__sdk.breakpoint",
+    "invocationHash": "96f0d1c4eabc6ed194113bb50e189cd294590964e9e1f2b22bc90cf13085fd82",
+    "stepId": "S000002",
+    "taskId": "__sdk.breakpoint",
+    "kind": "breakpoint",
+    "label": "breakpoint",
+    "taskDefRef": "tasks/01KJ0DM3PZMHQXNCQ3J90JRHEN/task.json",
+    "labels": [
+      "breakpoint"
+    ]
+  },
+  "checksum": "3e45733e71b846208812f8b26b111c6889fb393a0c91854cca95fe215738bfa6"
+}
